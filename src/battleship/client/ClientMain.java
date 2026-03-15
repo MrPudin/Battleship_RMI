@@ -49,7 +49,8 @@ public class ClientMain {
                 System.out.println("3. LeaveRoom");
                 System.out.println("4. Colocar barcos localmente");
                 System.out.println("5. Marcar listo");
-                System.out.println("6. Exit");
+                System.out.println("6. Enviar disparo");
+                System.out.println("0. Exit");
                 System.out.print("Opción: ");
 
                 String option = sc.nextLine().trim();
@@ -109,6 +110,29 @@ public class ClientMain {
                         break;
 
                     case "6":
+                        System.out.print("Fila: ");
+                        int row;
+                        try {
+                            row = Integer.parseInt(sc.nextLine().trim());
+                        } catch (NumberFormatException e) {
+                            System.out.println("Fila inválida");
+                            break;
+                        }
+
+                        System.out.print("Columna: ");
+                        int col;
+                        try {
+                            col = Integer.parseInt(sc.nextLine().trim());
+                        } catch (NumberFormatException e) {
+                            System.out.println("Columna inválida");
+                            break;
+                        }
+
+                        boolean shotSubmitted = server.submitShot(username, row, col);
+                        System.out.println(shotSubmitted ? "Disparo enviado" : "No se pudo enviar el disparo");
+                        break;
+
+                    case "0":
                         boolean exited = server.exit(username);
                         System.out.println(exited ? "Sesión cerrada" : "No se pudo cerrar la sesión");
                         running = false;

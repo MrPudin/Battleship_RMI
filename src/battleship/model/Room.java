@@ -1,5 +1,6 @@
 package battleship.model;
 
+import battleship.model.*;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -13,6 +14,8 @@ public class Room implements Serializable {
     private final Map<String, RoomRole> users = new HashMap<>();
     private final Set<String> alivePlayers = new HashSet<>();
     private final Set<String> readyPlayers = new HashSet<>();
+
+    private final Map<String, Coordinate> currentTurnShots = new HashMap<>();
 
     private GamePhase phase = GamePhase.WAITING_PLAYERS;
 
@@ -118,5 +121,27 @@ public class Room implements Serializable {
 
     public void resetReadyPlayers() {
         readyPlayers.clear();
+    }
+
+    public Map<String, Coordinate> getCurrentTurnShots() {
+        return currentTurnShots;
+    }
+
+    public boolean submitShot(String username, Coordinate coordinate) {
+        if (phase != GamePhase.PLAYING) return false;
+        if (users.get(username) != RoomRole.PLAYER) return false;
+        if (!alivePlayers.contains(username)) return false;
+        if (currentTurnShots.containsKey(username)) return false;
+
+        currentTurnShots.put(username, coordinate);
+        return true;
+    }
+
+    public boolean haveAllAlivePlayersSubmittedShot() {
+        return !alivePlayers.isEmpty() && currentTurnShots.keySet().containsAll(alivePlayers);
+    }
+
+    public void clearTurnShots() {
+        currentTurnShots.clear();
     }
 }

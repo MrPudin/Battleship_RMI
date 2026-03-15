@@ -15,4 +15,6 @@ public interface BattleshipServer extends Remote {
     boolean exit(String username) throws RemoteException;
 
     boolean playerReady(String username) throws RemoteException;
+
+    boolean submitShot(String username, int row, int column) throws RemoteException;
 }

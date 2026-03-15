@@ -1,9 +1,6 @@
 package battleship.server;
 
-import battleship.model.GamePhase;
-import battleship.model.Room;
-import battleship.model.RoomRole;
-import battleship.model.UserSession;
+import battleship.model.*;
 import battleship.remote.BattleshipServer;
 import battleship.remote.ClientCallback;
 
@@ -224,6 +221,37 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             room.setPhase(GamePhase.PLAYING);
             notifyRoom(room, "Todos los jugadores han colocado sus barcos. La partida empieza.");
             sendLog("Sala " + room.getName() + " -> fase PLAYING");
+        }
+
+        return true;
+    }
+
+    @Override
+    public synchronized boolean submitShot(String username, int row, int column) throws RemoteException {
+        UserSession session = users.get(username);
+        if (session == null || !session.isInRoom()) {
+            sendLog("SubmitShot -> Error usuario no está en una sala");
+            return false;
+        }
+
+        Room room = rooms.get(session.getRoomName());
+        if (room == null) {
+            sendLog("SubmitShot -> Error sala inexistente");
+            return false;
+        }
+
+        boolean submitted = room.submitShot(username, new Coordinate(row, column));
+        if (!submitted) {
+            sendLog("SubmitShot " + username + " -> Error no permitido en esta fase, rol o turno");
+            return false;
+        }
+
+        notifyRoom(room, "El jugador " + username + " ha enviado su disparo.");
+        sendLog("SubmitShot " + username + " (" + row + "," + column + ") -> Ok");
+
+        if (room.haveAllAlivePlayersSubmittedShot()) {
+            notifyRoom(room, "Todos los jugadores han enviado su disparo. Turno listo para resolución.");
+            sendLog("Sala " + room.getName() + " -> todos los disparos del turno recibidos");
         }
 
         return true;

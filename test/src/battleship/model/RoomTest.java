@@ -228,4 +228,76 @@ public class RoomTest {
 
         assertTrue(room.getReadyPlayers().isEmpty());
     }
+
+    @Test
+    void submitShotFailsIfPhaseIsNotPlaying() {
+        Room room = new Room("Sala1", 2);
+        room.addUser("Alice", RoomRole.PLAYER);
+
+        boolean submitted = room.submitShot("Alice", new Coordinate(1, 1));
+
+        assertFalse(submitted);
+    }
+
+    @Test
+    void submitShotFailsForSpectator() {
+        Room room = new Room("Sala1", 2);
+        room.addUser("Bob", RoomRole.SPECTATOR);
+        room.setPhase(GamePhase.PLAYING);
+
+        boolean submitted = room.submitShot("Bob", new Coordinate(1, 1));
+
+        assertFalse(submitted);
+    }
+
+    @Test
+    void submitShotWorksForAlivePlayerDuringPlaying() {
+        Room room = new Room("Sala1", 2);
+        room.addUser("Alice", RoomRole.PLAYER);
+        room.setPhase(GamePhase.PLAYING);
+
+        boolean submitted = room.submitShot("Alice", new Coordinate(2, 3));
+
+        assertTrue(submitted);
+        assertEquals(1, room.getCurrentTurnShots().size());
+        assertEquals(2, room.getCurrentTurnShots().get("Alice").getRow());
+        assertEquals(3, room.getCurrentTurnShots().get("Alice").getColumn());
+    }
+
+    @Test
+    void submitShotFailsIfPlayerAlreadySubmittedThisTurn() {
+        Room room = new Room("Sala1", 2);
+        room.addUser("Alice", RoomRole.PLAYER);
+        room.setPhase(GamePhase.PLAYING);
+
+        assertTrue(room.submitShot("Alice", new Coordinate(2, 3)));
+        assertFalse(room.submitShot("Alice", new Coordinate(4, 5)));
+    }
+
+    @Test
+    void haveAllAlivePlayersSubmittedShotReturnsTrueWhenAllShotsArePresent() {
+        Room room = new Room("Sala1", 2);
+        room.addUser("Alice", RoomRole.PLAYER);
+        room.addUser("Bob", RoomRole.PLAYER);
+        room.setPhase(GamePhase.PLAYING);
+
+        room.submitShot("Alice", new Coordinate(1, 1));
+        room.submitShot("Bob", new Coordinate(2, 2));
+
+        assertTrue(room.haveAllAlivePlayersSubmittedShot());
+    }
+
+    @Test
+    void clearTurnShotsEmptiesCurrentTurnShots() {
+        Room room = new Room("Sala1", 2);
+        room.addUser("Alice", RoomRole.PLAYER);
+        room.setPhase(GamePhase.PLAYING);
+
+        room.submitShot("Alice", new Coordinate(1, 1));
+        assertFalse(room.getCurrentTurnShots().isEmpty());
+
+        room.clearTurnShots();
+
+        assertTrue(room.getCurrentTurnShots().isEmpty());
+    }
 }
