@@ -439,4 +439,68 @@ public class BattleshipServerImplTest {
 
         assertTrue(room.getCurrentTurnShots().isEmpty());
     }
+
+    @Test
+    void whenAllPlayersSubmitShotsTurnGetsResolvedAndPlayersReceiveResultMessages() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub alice = new ClientCallStub();
+        ClientCallStub bob = new ClientCallStub();
+
+        server.registerPlayer("Alice", alice);
+        server.registerPlayer("Bob", bob);
+
+        server.newRoom("Alice", "Sala1", 2);
+        server.joinRoom("Bob", "Sala1", "PLAYER");
+
+        server.playerReady("Alice");
+        server.playerReady("Bob");
+
+        alice.clearMessages();
+        bob.clearMessages();
+
+        bob.enqueueShotResult(battleship.model.ResultantShot.HIT);
+        alice.enqueueShotResult(battleship.model.ResultantShot.MISS);
+
+        assertTrue(server.submitShot("Alice", 1, 1));
+        assertTrue(server.submitShot("Bob", 2, 2));
+
+        assertTrue(alice.containsMessage("Resultado del disparo de Alice"));
+        assertTrue(alice.containsMessage("Resultado del disparo de Bob"));
+        assertTrue(bob.containsMessage("Resultado del disparo de Alice"));
+        assertTrue(bob.containsMessage("Resultado del disparo de Bob"));
+        assertTrue(alice.containsMessage("Turno resuelto"));
+        assertTrue(bob.containsMessage("Turno resuelto"));
+    }
+
+    @Test
+    void defeatedPlayerBecomesSpectatorAndGameFinishesIfOnlyOnePlayerRemains() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub alice = new ClientCallStub();
+        ClientCallStub bob = new ClientCallStub();
+
+        server.registerPlayer("Alice", alice);
+        server.registerPlayer("Bob", bob);
+
+        server.newRoom("Alice", "Sala1", 2);
+        server.joinRoom("Bob", "Sala1", "PLAYER");
+
+        server.playerReady("Alice");
+        server.playerReady("Bob");
+
+        alice.clearMessages();
+        bob.clearMessages();
+
+        bob.enqueueShotResult(battleship.model.ResultantShot.SUNK);
+        bob.setLost(true);
+
+        alice.enqueueShotResult(battleship.model.ResultantShot.MISS);
+
+        assertTrue(server.submitShot("Alice", 3, 3));
+        assertTrue(server.submitShot("Bob", 4, 4));
+
+        assertTrue(alice.containsMessage("pasa a SPECTATOR"));
+        assertTrue(bob.containsMessage("pasa a SPECTATOR"));
+        assertTrue(alice.containsMessage("Partida terminada. Ganador: Alice"));
+        assertTrue(bob.containsMessage("Partida terminada. Ganador: Alice"));
+    }
 }

@@ -94,9 +94,12 @@ public class ClientMain {
 
                     case "4":
                         localBoard = buildDefaultBoard();
-                        System.out.println(localBoard != null
-                                ? "Barcos colocados localmente en el cliente"
-                                : "No se pudo colocar el tablero local");
+                        if (localBoard != null) {
+                            callback.setLocalBoard(localBoard);
+                            System.out.println("Barcos colocados localmente en el cliente");
+                        } else {
+                            System.out.println("No se pudo colocar el tablero local");
+                        }
                         break;
 
                     case "5":

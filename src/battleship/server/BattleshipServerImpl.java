@@ -4,9 +4,10 @@ import battleship.model.*;
 import battleship.remote.BattleshipServer;
 import battleship.remote.ClientCallback;
 
+
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class BattleshipServerImpl extends UnicastRemoteObject implements BattleshipServer {
@@ -250,10 +251,113 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         sendLog("SubmitShot " + username + " (" + row + "," + column + ") -> Ok");
 
         if (room.haveAllAlivePlayersSubmittedShot()) {
-            notifyRoom(room, "Todos los jugadores han enviado su disparo. Turno listo para resolución.");
+            notifyRoom(room, "Todos los jugadores han enviado su disparo. Resolviendo turno...");
             sendLog("Sala " + room.getName() + " -> todos los disparos del turno recibidos");
+            resolveTurn(room);
         }
 
         return true;
+    }
+
+    private void resolveTurn(Room room) throws RemoteException {
+        Map<String, Coordinate> shots = new HashMap<>(room.getCurrentTurnShots());
+        HashSet<String> aliveAtStart = new HashSet<>(room.getAlivePlayers());
+
+        Map<String, ResultantShot> globalResults = new HashMap<>();
+        Map<String, List<String>> details = new HashMap<>();
+
+        for (Map.Entry<String, Coordinate> shotEntry : shots.entrySet()) {
+            String shooter = shotEntry.getKey();
+            Coordinate shot = shotEntry.getValue();
+
+            ResultantShot globalResult = ResultantShot.MISS;
+            List<String> shotDetails = new ArrayList<>();
+
+            for (String target : aliveAtStart) {
+                if (target.equals(shooter)) continue;
+
+                UserSession targetSession = users.get(target);
+                if (targetSession == null) continue;
+
+                ResultantShot localResult = targetSession.getCallback()
+                        .resolveIncomingShot(shot.getRow(), shot.getColumn());
+
+                shotDetails.add("contra " + target + ": " + localResult);
+
+                if (localResult == ResultantShot.SUNK) {
+                    globalResult = ResultantShot.SUNK;
+                } else if (localResult == ResultantShot.HIT && globalResult != ResultantShot.SUNK) {
+                    globalResult = ResultantShot.HIT;
+                }
+            }
+
+            globalResults.put(shooter, globalResult);
+            details.put(shooter, shotDetails);
+        }
+
+        HashSet<String> defeatedPlayers = new HashSet<>();
+
+        for (String target : aliveAtStart) {
+            UserSession targetSession = users.get(target);
+            if (targetSession == null) continue;
+
+            if (targetSession.getCallback().hasLost()) {
+                defeatedPlayers.add(target);
+            }
+        }
+
+        for (String defeated : defeatedPlayers) {
+            room.convertPlayerToSpectator(defeated);
+            notifyRoom(room, "El jugador " + defeated + " ha perdido todos sus barcos y pasa a SPECTATOR.");
+            sendLog("Sala " + room.getName() + " -> jugador derrotado: " + defeated);
+        }
+
+        for (Map.Entry<String, Coordinate> shotEntry : shots.entrySet()) {
+            String shooter = shotEntry.getKey();
+            Coordinate shot = shotEntry.getValue();
+            ResultantShot result = globalResults.get(shooter);
+            List<String> shotDetails = details.get(shooter);
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("Resultado del disparo de ")
+                    .append(shooter)
+                    .append(" en (")
+                    .append(shot.getRow())
+                    .append(",")
+                    .append(shot.getColumn())
+                    .append("): ")
+                    .append(result);
+
+            if ((shotDetails != null) && !shotDetails.isEmpty()) {
+                sb.append(" -> ").append(String.join(" | ", shotDetails));
+            }
+
+            notifyRoom(room, sb.toString());
+        }
+
+        room.clearTurnShots();
+
+        if (room.getAlivePlayers().size() <= 1) {
+            room.setPhase(GamePhase.FINISHED);
+
+            String winner = null;
+            for (String survivor : room.getAlivePlayers()) {
+                winner = survivor;
+                break;
+            }
+
+            if (winner != null) {
+                notifyRoom(room, "Partida terminada. Ganador: " + winner);
+                sendLog("Sala " + room.getName() + " -> FINISHED. Ganador: " + winner);
+            } else {
+                notifyRoom(room, "Partida terminada sin ganador.");
+                sendLog("Sala " + room.getName() + " -> FINISHED sin ganador");
+            }
+
+            return;
+        }
+
+        notifyRoom(room, "Turno resuelto. Comienza un nuevo turno.");
+        sendLog("Sala " + room.getName() + " -> turno resuelto, nuevo turno iniciado");
     }
 }
