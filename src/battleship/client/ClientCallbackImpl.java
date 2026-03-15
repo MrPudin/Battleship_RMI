@@ -13,6 +13,6 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
 
     @Override
     public void notificar(String mensaje) throws RemoteException {
-        System.out.println("[SERVIDOR] " + mensaje);
+        System.out.println("\n[NOTIFICACIÓN] " + mensaje);
     }
 }

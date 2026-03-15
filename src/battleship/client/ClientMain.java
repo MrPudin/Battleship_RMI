@@ -1,13 +1,9 @@
 package battleship.client;
 
-import battleship.dto.ShipDTO;
-import battleship.model.ResultantShot;
 import battleship.remote.BattleshipServer;
 
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Scanner;
 
 public class ClientMain {
@@ -18,88 +14,81 @@ public class ClientMain {
 
             Scanner sc = new Scanner(System.in);
 
-            System.out.print("Nombre de jugador: ");
-            String nombre = sc.nextLine();
+            System.out.print("Nombre de usuario: ");
+            String username = sc.nextLine().trim();
 
-            ClientCallbackImpl callback = new ClientCallbackImpl();
-            boolean registrado = server.registerPlayer(nombre, callback);
-
-            if (!registrado) {
-                System.out.println("No se pudo registrar el jugador");
+            if (username.isEmpty()) {
+                System.out.println("Nombre inválido");
                 return;
             }
 
-            System.out.println("Jugador registrado");
+            ClientCallbackImpl callback = new ClientCallbackImpl();
+            boolean registered = server.registerPlayer(username, callback);
 
-            while (true) {
-                System.out.println("\n1. Crear partida");
-                System.out.println("2. Colocar barcos");
-                System.out.println("3. Disparar");
-                System.out.println("4. Ver turno actual");
-                System.out.println("5. Ver si la partida ha empezado");
-                System.out.println("0. Salir");
+            if (!registered) {
+                System.out.println("No se pudo registrar el usuario");
+                return;
+            }
+
+            System.out.println("Usuario registrado correctamente");
+
+            boolean running = true;
+
+            while (running) {
+                System.out.println("\n===== MENÚ =====");
+                System.out.println("1. NewRoom");
+                System.out.println("2. JoinRoom");
+                System.out.println("3. LeaveRoom");
+                System.out.println("4. Exit");
                 System.out.print("Opción: ");
 
-                String op = sc.nextLine();
+                String option = sc.nextLine().trim();
 
-                switch (op) {
+                switch (option) {
                     case "1":
-                        System.out.print("Nombre del rival: ");
-                        String rival = sc.nextLine();
-                        System.out.println(server.createGame(nombre, rival)
-                                ? "Partida creada"
-                                : "No se pudo crear");
+                        System.out.print("Nombre de la sala: ");
+                        String roomName = sc.nextLine().trim();
+
+                        System.out.print("Número máximo de jugadores (2-4): ");
+                        int maxPlayers;
+                        try {
+                            maxPlayers = Integer.parseInt(sc.nextLine().trim());
+                        } catch (NumberFormatException e) {
+                            System.out.println("Número inválido");
+                            break;
+                        }
+
+                        boolean created = server.newRoom(username, roomName, maxPlayers);
+                        System.out.println(created ? "Sala creada correctamente" : "No se pudo crear la sala");
                         break;
 
                     case "2":
-                        List<ShipDTO> barcos = new ArrayList<>();
+                        System.out.print("Nombre de la sala: ");
+                        String joinRoomName = sc.nextLine().trim();
 
-                        // Nombres corregidos para que coincidan con ShipType
-                        barcos.add(new ShipDTO("BOAT", 0, 0, "HORIZONTAL"));
-                        barcos.add(new ShipDTO("BOAT", 0, 3, "HORIZONTAL"));
-                        barcos.add(new ShipDTO("BOAT", 0, 6, "HORIZONTAL"));
-                        barcos.add(new ShipDTO("BOAT", 2, 0, "HORIZONTAL"));
+                        System.out.print("Rol (PLAYER / SPECTATOR / ADMIN): ");
+                        String role = sc.nextLine().trim().toUpperCase();
 
-                        barcos.add(new ShipDTO("FRIGATE", 2, 3, "HORIZONTAL"));
-                        barcos.add(new ShipDTO("FRIGATE", 4, 0, "HORIZONTAL"));
-                        barcos.add(new ShipDTO("FRIGATE", 4, 4, "HORIZONTAL"));
-
-                        barcos.add(new ShipDTO("CRUISER", 6, 0, "HORIZONTAL"));
-                        barcos.add(new ShipDTO("CRUISER", 8, 0, "HORIZONTAL"));
-
-                        barcos.add(new ShipDTO("AIRCRAFTCARRIER", 8, 5, "HORIZONTAL"));
-
-                        System.out.println(server.putShips(nombre, barcos)
-                                ? "Barcos colocados"
-                                : "No válidos");
+                        boolean joined = server.joinRoom(username, joinRoomName, role);
+                        System.out.println(joined ? "Te has unido a la sala" : "No se pudo unir a la sala");
                         break;
 
                     case "3":
-                        System.out.print("Fila: ");
-                        int fila = Integer.parseInt(sc.nextLine());
-
-                        System.out.print("Columna: ");
-                        int columna = Integer.parseInt(sc.nextLine());
-
-                        ResultantShot resultado = server.shot(nombre, fila, columna);
-                        System.out.println("Resultado: " + resultado);
+                        boolean left = server.leaveRoom(username);
+                        System.out.println(left ? "Has salido de la sala" : "No se pudo salir de la sala");
                         break;
 
                     case "4":
-                        System.out.println("Turno actual: " + server.obtainActualTurn(nombre));
+                        boolean exited = server.exit(username);
+                        System.out.println(exited ? "Sesión cerrada" : "No se pudo cerrar la sesión");
+                        running = false;
                         break;
-
-                    case "5":
-                        System.out.println("¿Partida empezada?: " + server.startedGame(nombre));
-                        break;
-
-                    case "0":
-                        return;
 
                     default:
                         System.out.println("Opción inválida");
                 }
             }
+
         } catch (Exception e) {
             e.printStackTrace();
         }

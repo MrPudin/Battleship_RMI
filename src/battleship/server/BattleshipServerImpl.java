@@ -1,137 +1,199 @@
 package battleship.server;
 
-import battleship.dto.ShipDTO;
-import battleship.model.Board;
-import battleship.model.Coordinate;
-import battleship.model.Game;
-import battleship.model.Orientation;
-import battleship.model.ResultantShot;
-import battleship.model.Ship;
-import battleship.model.ShipType;
+import battleship.model.GamePhase;
+import battleship.model.Room;
+import battleship.model.RoomRole;
+import battleship.model.UserSession;
 import battleship.remote.BattleshipServer;
 import battleship.remote.ClientCallback;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class BattleshipServerImpl extends UnicastRemoteObject implements BattleshipServer {
 
-    private final Map<String, ClientCallback> callbacks = new HashMap<>();
-    private final Map<String, Game> gamePerPlayer = new HashMap<>();
+    private final Map<String, UserSession> users = new ConcurrentHashMap<>();
+    private final Map<String, Room> rooms = new ConcurrentHashMap<>();
 
     public BattleshipServerImpl() throws RemoteException {
         super();
     }
 
     @Override
-    public synchronized boolean registerPlayer(String name, ClientCallback callback) {
-        if (callbacks.containsKey(name)) return false;
-        callbacks.put(name, callback);
+    public synchronized boolean registerPlayer(String username, ClientCallback callback) throws RemoteException {
+        if (users.containsKey(username)) return false;
+
+        users.put(username, new UserSession(username, callback));
+        sendLog("Usuario " + username + " conectado -> Ok");
         return true;
     }
 
     @Override
-    public synchronized boolean createGame(String player1, String player2) throws RemoteException {
-        if (!callbacks.containsKey(player1) || !callbacks.containsKey(player2)) return false;
-        if (gamePerPlayer.containsKey(player1) || gamePerPlayer.containsKey(player2)) return false;
+    public synchronized boolean newRoom(String username, String roomName, int maxPlayers) throws RemoteException {
+        if (!users.containsKey(username)) {
+            sendLog("NewRoom " + roomName + " " + maxPlayers + " -> Error usuario no registrado");
+            return false;
+        }
 
-        Game game = new Game(player1, player2);
-        gamePerPlayer.put(player1, game);
-        gamePerPlayer.put(player2, game);
+        if (roomName == null || roomName.isBlank()) {
+            sendLog("NewRoom " + roomName + " " + maxPlayers + " -> Error nombre inválido");
+            return false;
+        }
 
-        callbacks.get(player1).notificar("Partida creada contra " + player2);
-        callbacks.get(player2).notificar("Partida creada contra " + player1);
+        if (maxPlayers < 2 || maxPlayers > 4) {
+            sendLog("NewRoom " + roomName + " " + maxPlayers + " -> Error número jugadores inválido");
+            return false;
+        }
 
+        UserSession session = users.get(username);
+        if (session.isInRoom()) {
+            sendLog("NewRoom " + roomName + " " + maxPlayers + " -> Error usuario ya está en una sala");
+            return false;
+        }
+
+        if (rooms.containsKey(roomName)) {
+            sendLog("NewRoom " + roomName + " " + maxPlayers + " -> Error la sala ya existe");
+            return false;
+        }
+
+        Room room = new Room(roomName, maxPlayers);
+        room.addUser(username, RoomRole.PLAYER);
+        rooms.put(roomName, room);
+        session.setRoomName(roomName);
+
+        session.getCallback().notificar("Sala creada: " + roomName);
+        sendLog("NewRoom " + roomName + " " + maxPlayers + " -> Ok");
+
+        checkStartGame(room);
         return true;
     }
 
     @Override
-    public synchronized boolean putShips(String player, List<ShipDTO> shipsDto) throws RemoteException {
-        Game game = gamePerPlayer.get(player);
-        if (game == null) return false;
-        if (shipsDto == null || shipsDto.isEmpty()) return false;
+    public synchronized boolean joinRoom(String username, String roomName, String role) throws RemoteException {
+        UserSession session = users.get(username);
+        Room room = rooms.get(roomName);
 
-        Board tableroTemporal = new Board();
-
-        for (ShipDTO dto : shipsDto) {
-            ShipType tipo;
-            Orientation orientation;
-
-            try {
-                tipo = ShipType.valueOf(dto.type);
-                orientation = Orientation.valueOf(dto.orientation);
-            } catch (IllegalArgumentException e) {
-                return false;
-            }
-
-            Ship barco = new Ship(tipo, new Coordinate(dto.row, dto.column), orientation);
-
-            if (!tableroTemporal.colocarBarco(barco)) {
-                return false;
-            }
+        if (session == null) {
+            sendLog("JoinRoom " + roomName + " -> Error usuario no registrado");
+            return false;
         }
 
-        Board tableroReal = game.getTableroDe(player);
-        tableroReal.getShips().clear();
-        tableroReal.getShips().addAll(tableroTemporal.getShips());
-
-        String rival = game.getRivalDe(player);
-
-        if (!game.getTableroDe(player).getShips().isEmpty()
-                && !game.getTableroDe(rival).getShips().isEmpty()) {
-            game.setStarted(true);
-            callbacks.get(player).notificar("La partida ha comenzado");
-            callbacks.get(rival).notificar("La partida ha comenzado");
+        if (session.isInRoom()) {
+            sendLog("JoinRoom " + roomName + " -> Error usuario ya está en una sala");
+            return false;
         }
 
-        return true;
-    }
-
-    @Override
-    public synchronized ResultantShot shot(String player, int row, int column) throws RemoteException {
-        Game game = gamePerPlayer.get(player);
-
-        if (game == null) {
-            throw new RemoteException("Jugador sin partida");
+        if (room == null) {
+            sendLog("JoinRoom " + roomName + " -> Error no existe la sala");
+            return false;
         }
 
-        if (!game.isStarted()) {
-            throw new RemoteException("La partida todavía no ha comenzado");
-        }
-
-        ResultantShot resultado;
+        RoomRole roomRole;
         try {
-            resultado = game.disparar(player, new Coordinate(row, column));
-        } catch (IllegalStateException e) {
-            throw new RemoteException(e.getMessage());
+            roomRole = RoomRole.valueOf(role.toUpperCase());
+        } catch (Exception e) {
+            sendLog("JoinRoom " + roomName + " -> Error rol inválido");
+            return false;
         }
 
-        String rival = game.getRivalDe(player);
-
-        callbacks.get(player).notificar("Resultado disparo: " + resultado);
-        callbacks.get(rival).notificar("El rival ha disparado en (" + row + "," + column + ")");
-
-        if (game.isFinished()) {
-            callbacks.get(player).notificar("Has ganado");
-            callbacks.get(rival).notificar("Has perdido");
+        boolean joined = room.addUser(username, roomRole);
+        if (!joined) {
+            sendLog("JoinRoom " + roomName + " -> Error sala llena para jugadores");
+            return false;
         }
 
-        return resultado;
+        session.setRoomName(roomName);
+        session.getCallback().notificar("Conectado a sala: " + roomName + " como " + roomRole);
+        sendLog("JoinRoom " + roomName + " -> Ok");
+
+        checkStartGame(room);
+        return true;
     }
 
     @Override
-    public synchronized String obtainActualTurn(String player) {
-        Game game = gamePerPlayer.get(player);
-        if (game == null) return null;
-        return game.getCurrentTurn();
+    public synchronized boolean leaveRoom(String username) throws RemoteException {
+        UserSession session = users.get(username);
+        if (session == null || !session.isInRoom()) {
+            sendLog("LeaveRoom -> Error usuario no está en una sala");
+            return false;
+        }
+
+        String roomName = session.getRoomName();
+        Room room = rooms.get(roomName);
+
+        if (room == null) {
+            session.setRoomName(null);
+            sendLog("LeaveRoom -> Error sala inexistente");
+            return false;
+        }
+
+        room.removeUser(username);
+        session.setRoomName(null);
+
+        if (room.isEmpty()) {
+            rooms.remove(roomName);
+            sendLog("LeaveRoom -> Ok, sala eliminada: " + roomName);
+        } else {
+            sendLog("LeaveRoom -> Ok");
+        }
+
+        return true;
     }
 
     @Override
-    public synchronized boolean startedGame(String player) {
-        Game game = gamePerPlayer.get(player);
-        return game != null && game.isStarted();
+    public synchronized boolean exit(String username) throws RemoteException {
+        UserSession session = users.get(username);
+        if (session == null) {
+            sendLog("Exit -> Error usuario no registrado");
+            return false;
+        }
+
+        if (session.isInRoom()) {
+            leaveRoom(username);
+        }
+
+        users.remove(username);
+        sendLog("Exit -> Ok");
+        return true;
+    }
+
+    private void checkStartGame(Room room) throws RemoteException {
+        if (room.getPhase() == GamePhase.WAITING_PLAYERS && room.isFullForPlayers()) {
+            room.setPhase(GamePhase.PLACING_SHIPS);
+            notifyRoom(room, "La partida va a comenzar. Todos los jugadores deben colocar sus barcos.");
+            sendLog("Sala " + room.getName() + " completa -> partida en fase PLACING_SHIPS");
+        }
+    }
+
+    private void notifyRoom(Room room, String message) {
+        for (String username : room.getUsers().keySet()) {
+            UserSession session = users.get(username);
+            if (session != null) {
+                try {
+                    session.getCallback().notificar(message);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
+    private void sendLog(String message) {
+        for (UserSession session : users.values()) {
+            if (!session.isInRoom()) continue;
+
+            String roomName = session.getRoomName();
+            Room room = rooms.get(roomName);
+            if (room == null) continue;
+
+            RoomRole role = room.getUsers().get(session.getUsername());
+            if (role == RoomRole.ADMIN) {
+                try {
+                    session.getCallback().notificar("[Admin:Logs] " + message);
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 }

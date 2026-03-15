@@ -1,0 +1,266 @@
+package src.battleship.server;
+
+import battleship.server.BattleshipServerImpl;
+import org.junit.jupiter.api.Test;
+import src.battleship.testdoubles.ClientCallStub;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+public class BattleshipServerImplTest {
+
+    @Test
+    void registerPlayerReturnsTrueFirstTimeAndFalseIfDuplicated() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub callback1 = new ClientCallStub();
+        ClientCallStub callback2 = new ClientCallStub();
+
+        assertTrue(server.registerPlayer("Alice", callback1));
+        assertFalse(server.registerPlayer("Alice", callback2));
+    }
+
+    @Test
+    void newRoomWorksForRegisteredUser() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub callback = new ClientCallStub();
+
+        server.registerPlayer("Alice", callback);
+
+        boolean created = server.newRoom("Alice", "Sala1", 2);
+
+        assertTrue(created);
+        assertTrue(callback.containsMessage("Sala creada: Sala1"));
+    }
+
+    @Test
+    void newRoomFailsIfUserIsNotRegistered() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+
+        boolean created = server.newRoom("Alice", "Sala1", 2);
+
+        assertFalse(created);
+    }
+
+    @Test
+    void newRoomFailsWithInvalidPlayerCount() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub callback = new ClientCallStub();
+
+        server.registerPlayer("Alice", callback);
+
+        assertFalse(server.newRoom("Alice", "Sala1", 1));
+        assertFalse(server.newRoom("Alice", "Sala1", 5));
+    }
+
+    @Test
+    void newRoomFailsIfRoomAlreadyExists() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+
+        assertTrue(server.newRoom("Alice", "Sala1", 2));
+        assertFalse(server.newRoom("Bob", "Sala1", 2));
+    }
+
+    @Test
+    void newRoomFailsIfUserIsAlreadyInsideAnotherRoom() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub callback = new ClientCallStub();
+
+        server.registerPlayer("Alice", callback);
+
+        assertTrue(server.newRoom("Alice", "Sala1", 2));
+        assertFalse(server.newRoom("Alice", "Sala2", 2));
+    }
+
+    @Test
+    void joinRoomAsPlayerWorksCorrectly() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+
+        server.newRoom("Alice", "Sala1", 2);
+        boolean joined = server.joinRoom("Bob", "Sala1", "PLAYER");
+
+        assertTrue(joined);
+        assertTrue(bobCallback.containsMessage("Conectado a sala: Sala1 como PLAYER"));
+    }
+
+    @Test
+    void joinRoomAsSpectatorWorksCorrectly() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+
+        server.newRoom("Alice", "Sala1", 2);
+        boolean joined = server.joinRoom("Bob", "Sala1", "SPECTATOR");
+
+        assertTrue(joined);
+        assertTrue(bobCallback.containsMessage("Conectado a sala: Sala1 como SPECTATOR"));
+    }
+
+    @Test
+    void joinRoomFailsWithInvalidRole() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+
+        server.newRoom("Alice", "Sala1", 2);
+        boolean joined = server.joinRoom("Bob", "Sala1", "BANANA");
+
+        assertFalse(joined);
+    }
+
+    @Test
+    void joinRoomFailsIfRoomDoesNotExist() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub callback = new ClientCallStub();
+
+        server.registerPlayer("Bob", callback);
+
+        boolean joined = server.joinRoom("Bob", "SalaFantasma", "PLAYER");
+
+        assertFalse(joined);
+    }
+
+    @Test
+    void joinRoomFailsIfUserIsAlreadyInRoom() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+
+        server.newRoom("Alice", "Sala1", 2);
+        server.joinRoom("Bob", "Sala1", "SPECTATOR");
+
+        boolean joinedAgain = server.joinRoom("Bob", "Sala1", "PLAYER");
+
+        assertFalse(joinedAgain);
+    }
+
+    @Test
+    void joinRoomFailsForThirdPlayerWhenRoomMaxPlayersIsTwo() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+        ClientCallStub carolCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+        server.registerPlayer("Carol", carolCallback);
+
+        server.newRoom("Alice", "Sala1", 2);
+        assertTrue(server.joinRoom("Bob", "Sala1", "PLAYER"));
+
+        boolean thirdPlayerJoined = server.joinRoom("Carol", "Sala1", "PLAYER");
+
+        assertFalse(thirdPlayerJoined);
+    }
+
+    @Test
+    void roomPhaseStartsWhenPlayerSlotsAreFilled() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+
+        server.newRoom("Alice", "Sala1", 2);
+        server.joinRoom("Bob", "Sala1", "PLAYER");
+
+        assertTrue(aliceCallback.containsMessage("La partida va a comenzar"));
+        assertTrue(bobCallback.containsMessage("La partida va a comenzar"));
+    }
+
+    @Test
+    void adminReceivesLogsWhenActionsOccurInsideRoom() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+        ClientCallStub adminCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+        server.registerPlayer("Carol", adminCallback);
+
+        server.newRoom("Alice", "Sala1", 2);
+        assertTrue(server.joinRoom("Carol", "Sala1", "ADMIN"));
+
+        adminCallback.clearMessages();
+
+        server.joinRoom("Bob", "Sala1", "PLAYER");
+
+        assertTrue(
+                adminCallback.containsMessage("[Admin:Logs] JoinRoom Sala1 -> Ok")
+                        || adminCallback.containsMessage("[Admin:Logs] Sala Sala1 completa")
+        );
+    }
+
+    @Test
+    void leaveRoomWorksCorrectly() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub callback = new ClientCallStub();
+
+        server.registerPlayer("Alice", callback);
+        server.newRoom("Alice", "Sala1", 2);
+
+        assertTrue(server.leaveRoom("Alice"));
+        assertFalse(server.leaveRoom("Alice"));
+    }
+
+    @Test
+    void emptyRoomGetsDeletedAndCanBeRecreated() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+
+        assertTrue(server.newRoom("Alice", "Sala1", 2));
+        assertTrue(server.leaveRoom("Alice"));
+
+        assertTrue(server.newRoom("Bob", "Sala1", 2));
+    }
+
+    @Test
+    void exitWorksAndSecondExitFails() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub callback = new ClientCallStub();
+
+        server.registerPlayer("Alice", callback);
+        server.newRoom("Alice", "Sala1", 2);
+
+        assertTrue(server.exit("Alice"));
+        assertFalse(server.exit("Alice"));
+    }
+
+    @Test
+    void exitAlsoRemovesUserFromRoomSoRoomCanBeReused() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+
+        assertTrue(server.newRoom("Alice", "Sala1", 2));
+        assertTrue(server.exit("Alice"));
+
+        assertTrue(server.newRoom("Bob", "Sala1", 2));
+    }
+}
