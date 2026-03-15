@@ -13,4 +13,6 @@ public interface BattleshipServer extends Remote {
     boolean leaveRoom(String username) throws RemoteException;
 
     boolean exit(String username) throws RemoteException;
+
+    boolean playerReady(String username) throws RemoteException;
 }

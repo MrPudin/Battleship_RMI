@@ -196,4 +196,36 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             }
         }
     }
+
+    @Override
+    public synchronized boolean playerReady(String username) throws RemoteException {
+        UserSession session = users.get(username);
+        if (session == null || !session.isInRoom()) {
+            sendLog("PlayerReady -> Error usuario no está en una sala");
+            return false;
+        }
+
+        Room room = rooms.get(session.getRoomName());
+        if (room == null) {
+            sendLog("PlayerReady -> Error sala inexistente");
+            return false;
+        }
+
+        boolean ready = room.markPlayerReady(username);
+        if (!ready) {
+            sendLog("PlayerReady " + username + " -> Error no permitido en esta fase o rol");
+            return false;
+        }
+
+        notifyRoom(room, "El jugador " + username + " ya ha colocado sus barcos.");
+        sendLog("PlayerReady " + username + " -> Ok");
+
+        if (room.areAllPlayersReady()) {
+            room.setPhase(GamePhase.PLAYING);
+            notifyRoom(room, "Todos los jugadores han colocado sus barcos. La partida empieza.");
+            sendLog("Sala " + room.getName() + " -> fase PLAYING");
+        }
+
+        return true;
+    }
 }

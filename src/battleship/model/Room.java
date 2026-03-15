@@ -12,6 +12,7 @@ public class Room implements Serializable {
 
     private final Map<String, RoomRole> users = new HashMap<>();
     private final Set<String> alivePlayers = new HashSet<>();
+    private final Set<String> readyPlayers = new HashSet<>();
 
     private GamePhase phase = GamePhase.WAITING_PLAYERS;
 
@@ -34,6 +35,10 @@ public class Room implements Serializable {
 
     public Set<String> getAlivePlayers() {
         return alivePlayers;
+    }
+
+    public Set<String> getReadyPlayers() {
+        return readyPlayers;
     }
 
     public GamePhase getPhase() {
@@ -62,9 +67,12 @@ public class Room implements Serializable {
 
     public void removeUser(String username) {
         RoomRole role = users.remove(username);
+
         if (role == RoomRole.PLAYER) {
             alivePlayers.remove(username);
         }
+
+        readyPlayers.remove(username);
     }
 
     public int countPlayers() {
@@ -87,6 +95,28 @@ public class Room implements Serializable {
         if (users.get(username) == RoomRole.PLAYER) {
             users.put(username, RoomRole.SPECTATOR);
             alivePlayers.remove(username);
+            readyPlayers.remove(username);
         }
+    }
+
+    public boolean markPlayerReady(String username) {
+        if (users.get(username) != RoomRole.PLAYER) return false;
+        if (phase != GamePhase.PLACING_SHIPS) return false;
+
+        readyPlayers.add(username);
+        return true;
+    }
+
+    public boolean areAllPlayersReady() {
+        for (Map.Entry<String, RoomRole> entry : users.entrySet()) {
+            if (entry.getValue() == RoomRole.PLAYER && !readyPlayers.contains(entry.getKey())) {
+                return false;
+            }
+        }
+        return countPlayers() > 0;
+    }
+
+    public void resetReadyPlayers() {
+        readyPlayers.clear();
     }
 }

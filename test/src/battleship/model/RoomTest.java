@@ -154,4 +154,78 @@ public class RoomTest {
 
         assertEquals(GamePhase.PLACING_SHIPS, room.getPhase());
     }
+
+    @Test
+    void markPlayerReadyFailsIfUserIsNotPlayer() {
+        Room room = new Room("Sala1", 2);
+        room.addUser("Bob", RoomRole.SPECTATOR);
+        room.setPhase(GamePhase.PLACING_SHIPS);
+
+        boolean ready = room.markPlayerReady("Bob");
+
+        assertFalse(ready);
+        assertFalse(room.getReadyPlayers().contains("Bob"));
+    }
+
+    @Test
+    void markPlayerReadyFailsIfPhaseIsNotPlacingShips() {
+        Room room = new Room("Sala1", 2);
+        room.addUser("Alice", RoomRole.PLAYER);
+
+        boolean readyWhileWaiting = room.markPlayerReady("Alice");
+
+        assertFalse(readyWhileWaiting);
+        assertFalse(room.getReadyPlayers().contains("Alice"));
+    }
+
+    @Test
+    void markPlayerReadyWorksForPlayerDuringPlacingShips() {
+        Room room = new Room("Sala1", 2);
+        room.addUser("Alice", RoomRole.PLAYER);
+        room.setPhase(GamePhase.PLACING_SHIPS);
+
+        boolean ready = room.markPlayerReady("Alice");
+
+        assertTrue(ready);
+        assertTrue(room.getReadyPlayers().contains("Alice"));
+    }
+
+    @Test
+    void areAllPlayersReadyReturnsFalseIfAtLeastOnePlayerIsMissing() {
+        Room room = new Room("Sala1", 2);
+        room.addUser("Alice", RoomRole.PLAYER);
+        room.addUser("Bob", RoomRole.PLAYER);
+        room.setPhase(GamePhase.PLACING_SHIPS);
+
+        room.markPlayerReady("Alice");
+
+        assertFalse(room.areAllPlayersReady());
+    }
+
+    @Test
+    void areAllPlayersReadyReturnsTrueWhenAllPlayersAreReady() {
+        Room room = new Room("Sala1", 2);
+        room.addUser("Alice", RoomRole.PLAYER);
+        room.addUser("Bob", RoomRole.PLAYER);
+        room.setPhase(GamePhase.PLACING_SHIPS);
+
+        room.markPlayerReady("Alice");
+        room.markPlayerReady("Bob");
+
+        assertTrue(room.areAllPlayersReady());
+    }
+
+    @Test
+    void resetReadyPlayersClearsReadySet() {
+        Room room = new Room("Sala1", 2);
+        room.addUser("Alice", RoomRole.PLAYER);
+        room.setPhase(GamePhase.PLACING_SHIPS);
+
+        room.markPlayerReady("Alice");
+        assertTrue(room.getReadyPlayers().contains("Alice"));
+
+        room.resetReadyPlayers();
+
+        assertTrue(room.getReadyPlayers().isEmpty());
+    }
 }

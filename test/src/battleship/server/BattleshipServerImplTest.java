@@ -263,4 +263,107 @@ public class BattleshipServerImplTest {
 
         assertTrue(server.newRoom("Bob", "Sala1", 2));
     }
+
+    @Test
+    void playerReadyFailsIfUserIsNotRegistered() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+
+        assertFalse(server.playerReady("Ghost"));
+    }
+
+    @Test
+    void playerReadyFailsIfUserIsNotInsideRoom() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub callback = new ClientCallStub();
+
+        server.registerPlayer("Alice", callback);
+
+        assertFalse(server.playerReady("Alice"));
+    }
+
+    @Test
+    void playerReadyFailsIfRoomIsNotInPlacingShipsPhase() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub callback = new ClientCallStub();
+
+        server.registerPlayer("Alice", callback);
+        server.newRoom("Alice", "Sala1", 2);
+
+        assertFalse(server.playerReady("Alice"));
+    }
+
+    @Test
+    void playerReadyWorksWhenPlayerIsInsideRoomAndPhaseIsPlacingShips() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+
+        server.newRoom("Alice", "Sala1", 2);
+        server.joinRoom("Bob", "Sala1", "PLAYER");
+
+        boolean ready = server.playerReady("Alice");
+
+        assertTrue(ready);
+        assertTrue(aliceCallback.containsMessage("El jugador Alice ya ha colocado sus barcos."));
+        assertTrue(bobCallback.containsMessage("El jugador Alice ya ha colocado sus barcos."));
+    }
+
+    @Test
+    void playerReadyFailsForSpectator() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+
+        server.newRoom("Alice", "Sala1", 2);
+        server.joinRoom("Bob", "Sala1", "SPECTATOR");
+
+        assertFalse(server.playerReady("Bob"));
+    }
+
+    @Test
+    void whenAllPlayersAreReadyRoomTransitionsToPlaying() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+
+        server.newRoom("Alice", "Sala1", 2);
+        server.joinRoom("Bob", "Sala1", "PLAYER");
+
+        aliceCallback.clearMessages();
+        bobCallback.clearMessages();
+
+        assertTrue(server.playerReady("Alice"));
+        assertTrue(server.playerReady("Bob"));
+
+        assertTrue(aliceCallback.containsMessage("Todos los jugadores han colocado sus barcos. La partida empieza."));
+        assertTrue(bobCallback.containsMessage("Todos los jugadores han colocado sus barcos. La partida empieza."));
+    }
+
+    @Test
+    void playerReadyCanBeCalledByBothPlayersInOrder() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub aliceCallback = new ClientCallStub();
+        ClientCallStub bobCallback = new ClientCallStub();
+
+        server.registerPlayer("Alice", aliceCallback);
+        server.registerPlayer("Bob", bobCallback);
+
+        server.newRoom("Alice", "Sala1", 2);
+        server.joinRoom("Bob", "Sala1", "PLAYER");
+
+        assertTrue(server.playerReady("Bob"));
+        assertTrue(server.playerReady("Alice"));
+
+        assertTrue(aliceCallback.containsMessage("La partida empieza."));
+        assertTrue(bobCallback.containsMessage("La partida empieza."));
+    }
 }
