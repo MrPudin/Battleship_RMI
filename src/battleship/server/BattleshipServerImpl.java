@@ -1,13 +1,21 @@
 package battleship.server;
 
 import battleship.dto.ShipDTO;
-import battleship.model.*;
+import battleship.model.Board;
+import battleship.model.Coordinate;
+import battleship.model.Game;
+import battleship.model.Orientation;
+import battleship.model.ResultantShot;
+import battleship.model.Ship;
+import battleship.model.ShipType;
 import battleship.remote.BattleshipServer;
 import battleship.remote.ClientCallback;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class BattleshipServerImpl extends UnicastRemoteObject implements BattleshipServer {
 
@@ -36,29 +44,44 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
 
         callbacks.get(player1).notificar("Partida creada contra " + player2);
         callbacks.get(player2).notificar("Partida creada contra " + player1);
+
         return true;
     }
 
     @Override
-    public synchronized boolean putShips(String player, List<ShipDTO> ShipsDto) throws RemoteException {
+    public synchronized boolean putShips(String player, List<ShipDTO> shipsDto) throws RemoteException {
         Game game = gamePerPlayer.get(player);
         if (game == null) return false;
+        if (shipsDto == null || shipsDto.isEmpty()) return false;
 
-        Board tablero = new Board();
-        for (ShipDTO dto : ShipsDto) {
-            ShipType tipo = ShipType.valueOf(dto.type);
-            Orientation orientation = Orientation.valueOf(dto.orientation);
+        Board tableroTemporal = new Board();
+
+        for (ShipDTO dto : shipsDto) {
+            ShipType tipo;
+            Orientation orientation;
+
+            try {
+                tipo = ShipType.valueOf(dto.type);
+                orientation = Orientation.valueOf(dto.orientation);
+            } catch (IllegalArgumentException e) {
+                return false;
+            }
+
             Ship barco = new Ship(tipo, new Coordinate(dto.row, dto.column), orientation);
-            if (!tablero.colocarBarco(barco)) return false;
+
+            if (!tableroTemporal.colocarBarco(barco)) {
+                return false;
+            }
         }
 
-        Board real = game.getTableroDe(player);
-        real.getShips().clear();
-        real.getShips().addAll(tablero.getShips());
+        Board tableroReal = game.getTableroDe(player);
+        tableroReal.getShips().clear();
+        tableroReal.getShips().addAll(tableroTemporal.getShips());
 
         String rival = game.getRivalDe(player);
-        if (!game.getTableroDe(player).getShips().isEmpty() &&
-                !game.getTableroDe(rival).getShips().isEmpty()) {
+
+        if (!game.getTableroDe(player).getShips().isEmpty()
+                && !game.getTableroDe(rival).getShips().isEmpty()) {
             game.setStarted(true);
             callbacks.get(player).notificar("La partida ha comenzado");
             callbacks.get(rival).notificar("La partida ha comenzado");
@@ -70,10 +93,24 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
     @Override
     public synchronized ResultantShot shot(String player, int row, int column) throws RemoteException {
         Game game = gamePerPlayer.get(player);
-        if (game == null) throw new RemoteException("Jugador sin partida");
-        ResultantShot resultado = game.disparar(player, new Coordinate(row, column));
+
+        if (game == null) {
+            throw new RemoteException("Jugador sin partida");
+        }
+
+        if (!game.isStarted()) {
+            throw new RemoteException("La partida todavía no ha comenzado");
+        }
+
+        ResultantShot resultado;
+        try {
+            resultado = game.disparar(player, new Coordinate(row, column));
+        } catch (IllegalStateException e) {
+            throw new RemoteException(e.getMessage());
+        }
 
         String rival = game.getRivalDe(player);
+
         callbacks.get(player).notificar("Resultado disparo: " + resultado);
         callbacks.get(rival).notificar("El rival ha disparado en (" + row + "," + column + ")");
 

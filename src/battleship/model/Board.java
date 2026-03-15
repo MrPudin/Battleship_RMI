@@ -43,6 +43,7 @@ public class Board implements Serializable {
     public ResultantShot disparar(Coordinate c) {
         boolean repetido = disparosRecibidos.stream()
                 .anyMatch(x -> x.getRow() == c.getRow() && x.getColumn() == c.getColumn());
+
         if (repetido) return ResultantShot.REPEATED;
 
         disparosRecibidos.add(c);
@@ -57,7 +58,7 @@ public class Board implements Serializable {
     }
 
     public boolean allSunk() {
-        return ships.stream().allMatch(Ship::itsSunk);
+        return !ships.isEmpty() && ships.stream().allMatch(Ship::itsSunk);
     }
 
     public List<Ship> getShips() {

@@ -7,12 +7,13 @@ public class Game implements Serializable {
     private final String player2;
     private final Board board1 = new Board();
     private final Board board2 = new Board();
+
     private String currentTurn;
     private boolean started = false;
     private boolean finished = false;
     private String winner;
 
-    public Game (String player1, String player2) {
+    public Game(String player1, String player2) {
         this.player1 = player1;
         this.player2 = player2;
         this.currentTurn = player1;
@@ -57,8 +58,17 @@ public class Game implements Serializable {
     }
 
     public ResultantShot disparar(String jugador, Coordinate c) {
-        if (finished) throw new IllegalStateException("La partida ya terminó");
-        if (!currentTurn.equals(jugador)) throw new IllegalStateException("No es tu turno");
+        if (!started) {
+            throw new IllegalStateException("La partida no ha comenzado");
+        }
+
+        if (finished) {
+            throw new IllegalStateException("La partida ya terminó");
+        }
+
+        if (!currentTurn.equals(jugador)) {
+            throw new IllegalStateException("No es tu turno");
+        }
 
         Board rival = getTableroRivalDe(jugador);
         ResultantShot resultado = rival.disparar(c);
@@ -69,7 +79,7 @@ public class Game implements Serializable {
             return resultado;
         }
 
-        if (resultado == ResultantShot.SUNK) {
+        if (resultado != ResultantShot.REPEATED) {
             currentTurn = getRivalDe(jugador);
         }
 
