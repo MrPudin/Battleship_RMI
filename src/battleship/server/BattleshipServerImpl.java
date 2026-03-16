@@ -1,5 +1,7 @@
 package battleship.server;
 
+import battleship.dto.GameStatusDTO;
+import battleship.dto.ShipDTO;
 import battleship.model.*;
 import battleship.remote.BattleshipServer;
 import battleship.remote.ClientCallback;
@@ -61,7 +63,7 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         rooms.put(roomName, room);
         session.setRoomName(roomName);
 
-        session.getCallback().notificar("Sala creada: " + roomName);
+        notifyUser(session, buildStatus(room, "Sala creada: " + roomName));
         sendLog("NewRoom " + roomName + " " + maxPlayers + " -> Ok");
 
         checkStartGame(room);
@@ -103,7 +105,7 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         }
 
         session.setRoomName(roomName);
-        session.getCallback().notificar("Conectado a sala: " + roomName + " como " + roomRole);
+        notifyUser(session, buildStatus(room, "Conectado a sala: " + roomName + " como " + roomRole));
         sendLog("JoinRoom " + roomName + " -> Ok");
 
         checkStartGame(room);
@@ -139,9 +141,9 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             sendLog("LeaveRoom -> Ok, sala eliminada: " + roomName);
         } else {
             if (role != null) {
-                notifyRoom(room, "El usuario " + username + " ha abandonado la sala (" + role + ").");
+                notifyRoom(room, buildStatus(room, "El usuario " + username + " ha abandonado la sala (" + role + ")."));
             } else {
-                notifyRoom(room, "El usuario " + username + " ha abandonado la sala.");
+                notifyRoom(room, buildStatus(room, "El usuario " + username + " ha abandonado la sala."));
             }
             sendLog("LeaveRoom -> Ok");
         }
@@ -169,20 +171,56 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
     private void checkStartGame(Room room) throws RemoteException {
         if (room.getPhase() == GamePhase.WAITING_PLAYERS && room.isFullForPlayers()) {
             room.setPhase(GamePhase.PLACING_SHIPS);
-            notifyRoom(room, "La partida va a comenzar. Todos los jugadores deben colocar sus barcos.");
+            notifyRoom(room, buildStatus(room, "La partida va a comenzar. Todos los jugadores deben colocar sus barcos."));
             sendLog("Sala " + room.getName() + " completa -> partida en fase PLACING_SHIPS");
         }
     }
 
-    private void notifyRoom(Room room, String message) {
+    private GameStatusDTO buildStatus(Room room, String message) {
+        GameStatusDTO status = new GameStatusDTO();
+        status.message = message;
+        if (room != null) {
+            status.started = room.getPhase() != GamePhase.WAITING_PLAYERS;
+            status.finished = room.getPhase() == GamePhase.FINISHED;
+        }
+        return status;
+    }
+
+    private ShipDTO buildShotDTO(Coordinate shot, ResultantShot result) {
+        return new ShipDTO(result.toString(), shot.getRow(), shot.getColumn(), "");
+    }
+
+    private void notifyRoom(Room room, GameStatusDTO status) {
         for (String username : room.getUsers().keySet()) {
             UserSession session = users.get(username);
             if (session != null) {
                 try {
-                    session.getCallback().notificar(message);
+                    session.getCallback().notifyGameStatus(status);
                 } catch (Exception ignored) {
                 }
             }
+        }
+    }
+
+    private void notifyRoomTurnResult(Room room, String shooter, ShipDTO shot, List<String> details) {
+        for (String username : room.getUsers().keySet()) {
+            UserSession session = users.get(username);
+            if (session != null) {
+                try {
+                    session.getCallback().notifyTurnResult(shooter, shot, details);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
+    private void notifyUser(UserSession session, GameStatusDTO status) {
+        if (session == null) {
+            return;
+        }
+        try {
+            session.getCallback().notifyGameStatus(status);
+        } catch (Exception ignored) {
         }
     }
 
@@ -197,7 +235,7 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             RoomRole role = room.getUsers().get(session.getUsername());
             if (role == RoomRole.ADMIN) {
                 try {
-                    session.getCallback().notificar("[Admin:Logs] " + message);
+                    session.getCallback().notifyLog("[Admin:Logs] " + message);
                 } catch (Exception ignored) {
                 }
             }
@@ -224,12 +262,12 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             return false;
         }
 
-        notifyRoom(room, "El jugador " + username + " ya ha colocado sus barcos.");
+        notifyRoom(room, buildStatus(room, "El jugador " + username + " ya ha colocado sus barcos."));
         sendLog("PlayerReady " + username + " -> Ok");
 
         if (room.areAllPlayersReady()) {
             room.setPhase(GamePhase.PLAYING);
-            notifyRoom(room, "Todos los jugadores han colocado sus barcos. La partida empieza.");
+            notifyRoom(room, buildStatus(room, "Todos los jugadores han colocado sus barcos. La partida empieza."));
             sendLog("Sala " + room.getName() + " -> fase PLAYING");
         }
 
@@ -256,11 +294,11 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             return false;
         }
 
-        notifyRoom(room, "El jugador " + username + " ha enviado su disparo.");
+        notifyRoom(room, buildStatus(room, "El jugador " + username + " ha enviado su disparo."));
         sendLog("SubmitShot " + username + " (" + row + "," + column + ") -> Ok");
 
         if (room.haveAllAlivePlayersSubmittedShot()) {
-            notifyRoom(room, "Todos los jugadores han enviado su disparo. Resolviendo turno...");
+            notifyRoom(room, buildStatus(room, "Todos los jugadores han enviado su disparo. Resolviendo turno..."));
             sendLog("Sala " + room.getName() + " -> todos los disparos del turno recibidos");
             resolveTurn(room);
         }
@@ -281,10 +319,15 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         }
 
         if (winner != null) {
-            notifyRoom(room, "Partida terminada. Ganador: " + winner);
+            GameStatusDTO status = buildStatus(room, "Partida terminada. Ganador: " + winner);
+            status.finished = true;
+            status.winner = winner;
+            notifyRoom(room, status);
             sendLog("Sala " + room.getName() + " -> FINISHED. Ganador: " + winner);
         } else {
-            notifyRoom(room, "Partida terminada sin ganador.");
+            GameStatusDTO status = buildStatus(room, "Partida terminada sin ganador.");
+            status.finished = true;
+            notifyRoom(room, status);
             sendLog("Sala " + room.getName() + " -> FINISHED sin ganador");
         }
     }
@@ -338,7 +381,7 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
 
         for (String defeated : defeatedPlayers) {
             room.convertPlayerToSpectator(defeated);
-            notifyRoom(room, "El jugador " + defeated + " ha perdido todos sus barcos y pasa a SPECTATOR.");
+            notifyRoom(room, buildStatus(room, "El jugador " + defeated + " ha perdido todos sus barcos y pasa a SPECTATOR."));
             sendLog("Sala " + room.getName() + " -> jugador derrotado: " + defeated);
         }
 
@@ -347,22 +390,8 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             Coordinate shot = shotEntry.getValue();
             ResultantShot result = globalResults.get(shooter);
             List<String> shotDetails = details.get(shooter);
-
-            StringBuilder sb = new StringBuilder();
-            sb.append("Resultado del disparo de ")
-                    .append(shooter)
-                    .append(" en (")
-                    .append(shot.getRow())
-                    .append(",")
-                    .append(shot.getColumn())
-                    .append("): ")
-                    .append(result);
-
-            if ((shotDetails != null) && !shotDetails.isEmpty()) {
-                sb.append(" -> ").append(String.join(" | ", shotDetails));
-            }
-
-            notifyRoom(room, sb.toString());
+            ShipDTO shotDto = buildShotDTO(shot, result);
+            notifyRoomTurnResult(room, shooter, shotDto, shotDetails);
         }
 
         room.clearTurnShots();
@@ -372,7 +401,7 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             return;
         }
 
-        notifyRoom(room, "Turno resuelto. Comienza un nuevo turno.");
+        notifyRoom(room, buildStatus(room, "Turno resuelto. Comienza un nuevo turno."));
         sendLog("Sala " + room.getName() + " -> turno resuelto, nuevo turno iniciado");
     }
 

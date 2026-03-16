@@ -8,8 +8,6 @@ public class ShipDTO implements Serializable {
     public int column;
     public String orientation;
 
-    public ShipDTO() {
-    }
 
     public ShipDTO(String type, int row, int column, String orientation) {
         this.type = type;

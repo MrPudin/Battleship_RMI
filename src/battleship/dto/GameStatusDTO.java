@@ -3,6 +3,7 @@ package battleship.dto;
 import java.io.Serializable;
 
 public class GameStatusDTO implements Serializable {
+    public String message;
     public String player;
     public String rival;
     public String currentTurn;
