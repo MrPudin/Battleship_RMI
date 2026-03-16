@@ -8,16 +8,16 @@ public class Board implements Serializable {
     public static final int SIZE = 10;
 
     private final List<Ship> ships = new ArrayList<>();
-    private final List<Coordinate> disparosRecibidos = new ArrayList<>();
+    private final List<Coordinate> recivedShots = new ArrayList<>();
 
-    public boolean colocarBarco(Ship ship) {
-        if (!cabe(ship)) return false;
-        if (colisiona(ship)) return false;
+    public boolean placeShip(Ship ship) {
+        if (!fits(ship)) return false;
+        if (collides(ship)) return false;
         ships.add(ship);
         return true;
     }
 
-    private boolean cabe(Ship ship) {
+    private boolean fits(Ship ship) {
         for (Coordinate c : ship.getCells()) {
             if (c.getRow() < 0 || c.getRow() >= SIZE || c.getColumn() < 0 || c.getColumn() >= SIZE) {
                 return false;
@@ -26,7 +26,7 @@ public class Board implements Serializable {
         return true;
     }
 
-    private boolean colisiona(Ship newShip) {
+    private boolean collides(Ship newShip) {
         for (Coordinate newCoordinate : newShip.getCells()) {
             for (Ship ship : ships) {
                 for (Coordinate existente : ship.getCells()) {
@@ -40,17 +40,17 @@ public class Board implements Serializable {
         return false;
     }
 
-    public ResultantShot disparar(Coordinate c) {
-        boolean repetido = disparosRecibidos.stream()
+    public ResultantShot shoot(Coordinate c) {
+        boolean repetido = recivedShots.stream()
                 .anyMatch(x -> x.getRow() == c.getRow() && x.getColumn() == c.getColumn());
 
         if (repetido) return ResultantShot.REPEATED;
 
-        disparosRecibidos.add(c);
+        recivedShots.add(c);
 
         for (Ship ship : ships) {
             if (ship.registerImpact(c)) {
-                return ship.itsSunk() ? ResultantShot.SUNK : ResultantShot.HIT;
+                return ship.isSunk() ? ResultantShot.SUNK : ResultantShot.HIT;
             }
         }
 
@@ -58,14 +58,14 @@ public class Board implements Serializable {
     }
 
     public boolean allSunk() {
-        return !ships.isEmpty() && ships.stream().allMatch(Ship::itsSunk);
+        return !ships.isEmpty() && ships.stream().allMatch(Ship::isSunk);
     }
 
     public List<Ship> getShips() {
         return ships;
     }
 
-    public List<Coordinate> getDisparosRecibidos() {
-        return disparosRecibidos;
+    public List<Coordinate> getRecivedShots() {
+        return recivedShots;
     }
 }

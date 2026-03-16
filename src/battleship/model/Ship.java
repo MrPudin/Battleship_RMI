@@ -38,18 +38,18 @@ public class Ship implements Serializable {
         return cells;
     }
 
-    public boolean ocupa(Coordinate c) {
+    public boolean occupies(Coordinate c) {
         return getCells().stream().anyMatch(x -> x.getRow() == c.getRow() && x.getColumn() == c.getColumn());
     }
 
     public boolean registerImpact(Coordinate c) {
-        if (!ocupa(c)) return false;
-        boolean yaImpactada = impacts.stream().anyMatch(x -> x.getRow() == c.getRow() && x.getColumn() == c.getColumn());
-        if (!yaImpactada) impacts.add(c);
+        if (!occupies(c)) return false;
+        boolean alreadyHit = impacts.stream().anyMatch(x -> x.getRow() == c.getRow() && x.getColumn() == c.getColumn());
+        if (!alreadyHit) impacts.add(c);
         return true;
     }
 
-    public boolean itsSunk() {
+    public boolean isSunk() {
         return impacts.size() == type.getSize();
     }
 }

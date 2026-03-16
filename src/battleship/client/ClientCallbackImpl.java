@@ -72,7 +72,7 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
             return ResultantShot.MISS;
         }
 
-        return localBoard.disparar(new Coordinate(row, column));
+        return localBoard.shoot(new Coordinate(row, column));
     }
 
     @Override
