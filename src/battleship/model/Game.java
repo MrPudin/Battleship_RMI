@@ -71,18 +71,18 @@ public class Game implements Serializable {
         }
 
         Board rival = getOpponentBoardOf(player);
-        ResultantShot result = rival.shoot(c);
+        ResultantShot resultado = rival.shoot(c);
 
         if (rival.allSunk()) {
             finished = true;
             winner = player;
-            return result;
+            return resultado;
         }
 
-        if (result != ResultantShot.REPEATED) {
+        if (resultado != ResultantShot.REPEATED) {
             currentTurn = getOpponentOf(player);
         }
 
-        return result;
+        return resultado;
     }
 }

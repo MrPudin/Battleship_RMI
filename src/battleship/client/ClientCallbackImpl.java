@@ -27,12 +27,48 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
         if (status == null) {
             return;
         }
+
+        System.out.println("\n================ ESTADO ================");
+
         if (status.message != null && !status.message.isBlank()) {
-            System.out.println("\n[NOTIFICACIÃ“N] " + status.message);
+            System.out.println("Mensaje: " + status.message);
         }
-        if (status.finished && status.winner != null && !status.winner.isBlank()) {
-            System.out.println("[ESTADO] Ganador: " + status.winner);
+
+        if (status.roomName != null) {
+            System.out.println("Sala: " + status.roomName);
         }
+
+        if (status.phase != null) {
+            System.out.println("Fase: " + status.phase);
+        }
+
+        if (status.yourRole != null) {
+            System.out.println("Tu rol: " + status.yourRole);
+        }
+
+        System.out.println("Sigues vivo: " + (status.youAreAlive ? "Sí" : "No"));
+        System.out.println("Empezada: " + (status.started ? "Sí" : "No"));
+        System.out.println("Terminada: " + (status.finished ? "Sí" : "No"));
+
+        if (status.winner != null && !status.winner.isBlank()) {
+            System.out.println("Ganador: " + status.winner);
+        }
+
+        System.out.println("Jugadores actuales: " + status.currentPlayers + "/" + status.maxPlayers);
+
+        if (status.allUsers != null && !status.allUsers.isEmpty()) {
+            System.out.println("Usuarios en sala: " + String.join(", ", status.allUsers));
+        }
+
+        if (status.alivePlayers != null && !status.alivePlayers.isEmpty()) {
+            System.out.println("Jugadores vivos: " + String.join(", ", status.alivePlayers));
+        }
+
+        if (status.readyPlayers != null && !status.readyPlayers.isEmpty()) {
+            System.out.println("Jugadores listos: " + String.join(", ", status.readyPlayers));
+        }
+
+        System.out.println("========================================");
     }
 
     @Override
