@@ -18,6 +18,10 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
         super();
     }
 
+    public ClientCallbackImpl(int serverPort) throws RemoteException {
+        super(serverPort);
+    }
+
     public void setLocalBoard(Board localBoard) {
         this.localBoard = localBoard;
     }

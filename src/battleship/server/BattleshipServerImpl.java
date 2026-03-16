@@ -21,6 +21,10 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         super();
     }
 
+    public BattleshipServerImpl(int serverPort) throws RemoteException {
+        super(serverPort);
+    }
+
     @Override
     public synchronized boolean registerPlayer(String username, ClientCallback callback) throws RemoteException {
         if (users.containsKey(username)) return false;

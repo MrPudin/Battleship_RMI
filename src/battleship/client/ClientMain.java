@@ -17,7 +17,14 @@ public class ClientMain {
 
     public static void main(String[] args) {
         try {
-            Registry registry = LocateRegistry.getRegistry("localhost", 1099);
+            String serverHost = args.length > 0 ? args[0] : "127.0.0.1";
+            int registryPort = args.length > 1 ? Integer.parseInt(args[1]) : 1099;
+            String clientHost = args.length > 2 ? args[2] : "127.0.0.1";
+            int callbackPort = args.length > 3 ? Integer.parseInt(args[3]) : 1200;
+
+            System.setProperty("java.rmi.server.hostname", clientHost);
+
+            Registry registry = LocateRegistry.getRegistry(serverHost, registryPort);
             BattleshipServer server = (BattleshipServer) registry.lookup("BattleshipServer");
 
             Scanner sc = new Scanner(System.in);
@@ -30,7 +37,7 @@ public class ClientMain {
                 return;
             }
 
-            ClientCallbackImpl callback = new ClientCallbackImpl();
+            ClientCallbackImpl callback = new ClientCallbackImpl(callbackPort);
             boolean registered = server.registerPlayer(username, callback);
 
             if (!registered) {
@@ -88,6 +95,7 @@ public class ClientMain {
                         boolean left = server.leaveRoom(username);
                         if (left) {
                             localBoard = null;
+                            callback.setLocalBoard(null);
                         }
                         System.out.println(left ? "Has salido de la sala" : "No se pudo salir de la sala");
                         break;
@@ -145,7 +153,6 @@ public class ClientMain {
                         System.out.println("Opción inválida");
                 }
             }
-
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -153,25 +160,8 @@ public class ClientMain {
 
     private static Board buildDefaultBoard() {
         Board board = new Board();
-
         boolean ok = true;
         ok &= board.placeShip(new Ship(ShipType.BOAT, new Coordinate(0, 0), Orientation.HORIZONTAL));
-        /*
-        ok &= board.placeShip(new Ship(ShipType.BOAT, new Coordinate(0, 3), Orientation.HORIZONTAL));
-        ok &= board.placeShip(new Ship(ShipType.BOAT, new Coordinate(0, 6), Orientation.HORIZONTAL));
-        ok &= board.placeShip(new Ship(ShipType.BOAT, new Coordinate(2, 0), Orientation.HORIZONTAL));
-
-        ok &= board.placeShip(new Ship(ShipType.FRIGATE, new Coordinate(2, 3), Orientation.HORIZONTAL));
-        ok &= board.placeShip(new Ship(ShipType.FRIGATE, new Coordinate(4, 0), Orientation.HORIZONTAL));
-        ok &= board.placeShip(new Ship(ShipType.FRIGATE, new Coordinate(4, 4), Orientation.HORIZONTAL));
-
-        ok &= board.placeShip(new Ship(ShipType.CRUISER, new Coordinate(6, 0), Orientation.HORIZONTAL));
-        ok &= board.placeShip(new Ship(ShipType.CRUISER, new Coordinate(8, 0), Orientation.HORIZONTAL));
-
-        ok &= board.placeShip(new Ship(ShipType.AIRCRAFTCARRIER, new Coordinate(8, 5), Orientation.HORIZONTAL));
-
-         */
-
         return ok ? board : null;
     }
 }
