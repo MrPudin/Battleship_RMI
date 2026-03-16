@@ -503,4 +503,93 @@ public class BattleshipServerImplTest {
         assertTrue(alice.containsMessage("Partida terminada. Ganador: Alice"));
         assertTrue(bob.containsMessage("Partida terminada. Ganador: Alice"));
     }
+
+    @Test
+    void submitShotFailsWhenGameIsFinished() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub alice = new ClientCallStub();
+        ClientCallStub bob = new ClientCallStub();
+
+        server.registerPlayer("Alice", alice);
+        server.registerPlayer("Bob", bob);
+
+        server.newRoom("Alice", "Sala1", 2);
+        server.joinRoom("Bob", "Sala1", "PLAYER");
+
+        server.playerReady("Alice");
+        server.playerReady("Bob");
+
+        bob.enqueueShotResult(ResultantShot.SUNK);
+        bob.setLost(true);
+        alice.enqueueShotResult(ResultantShot.MISS);
+
+        assertTrue(server.submitShot("Alice", 1, 1));
+        assertTrue(server.submitShot("Bob", 2, 2));
+
+        assertFalse(server.submitShot("Alice", 3, 3));
+    }
+
+    @Test
+    void playerReadyFailsWhenGameIsFinished() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub alice = new ClientCallStub();
+        ClientCallStub bob = new ClientCallStub();
+
+        server.registerPlayer("Alice", alice);
+        server.registerPlayer("Bob", bob);
+
+        server.newRoom("Alice", "Sala1", 2);
+        server.joinRoom("Bob", "Sala1", "PLAYER");
+
+        server.playerReady("Alice");
+        server.playerReady("Bob");
+
+        bob.enqueueShotResult(ResultantShot.SUNK);
+        bob.setLost(true);
+        alice.enqueueShotResult(ResultantShot.MISS);
+
+        assertTrue(server.submitShot("Alice", 1, 1));
+        assertTrue(server.submitShot("Bob", 2, 2));
+
+        assertFalse(server.playerReady("Alice"));
+    }
+
+    @Test
+    void adminCannotSubmitShot() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub alice = new ClientCallStub();
+        ClientCallStub admin = new ClientCallStub();
+        ClientCallStub bob = new ClientCallStub();
+
+        server.registerPlayer("Alice", alice);
+        server.registerPlayer("Carol", admin);
+        server.registerPlayer("Bob", bob);
+
+        server.newRoom("Alice", "Sala1", 2);
+        server.joinRoom("Bob", "Sala1", "PLAYER");
+        server.joinRoom("Carol", "Sala1", "ADMIN");
+
+        server.playerReady("Alice");
+        server.playerReady("Bob");
+
+        assertFalse(server.submitShot("Carol", 5, 5));
+    }
+
+    @Test
+    void gameFinishesIfOnlyOnePlayerRemainsAfterLeaveRoom() throws Exception {
+        BattleshipServerImpl server = new BattleshipServerImpl();
+        ClientCallStub alice = new ClientCallStub();
+        ClientCallStub bob = new ClientCallStub();
+
+        server.registerPlayer("Alice", alice);
+        server.registerPlayer("Bob", bob);
+
+        server.newRoom("Alice", "Sala1", 2);
+        server.joinRoom("Bob", "Sala1", "PLAYER");
+
+        assertTrue(server.leaveRoom("Bob"));
+
+        assertFalse(server.playerReady("Alice"));
+        assertFalse(server.submitShot("Alice", 1, 1));
+    }
 }

@@ -290,6 +290,11 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             return false;
         }
 
+        if (room.getPhase() == GamePhase.FINISHED) {
+            sendLog("PlayerReady " + username + " -> Error la partida ya ha terminado");
+            return false;
+        }
+
         boolean ready = room.markPlayerReady(username);
         if (!ready) {
             sendLog("PlayerReady " + username + " -> Error no permitido en esta fase o rol");
@@ -322,6 +327,11 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             return false;
         }
 
+        if (room.getPhase() == GamePhase.FINISHED) {
+            sendLog("PlayerReady " + username + " -> Error la partida ya ha terminado");
+            return false;
+        }
+
         boolean submitted = room.submitShot(username, new Coordinate(row, column));
         if (!submitted) {
             sendLog("SubmitShot " + username + " -> Error no permitido en esta fase, rol o turno");
@@ -344,6 +354,10 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             return;
         }
 
+        if (room.getPhase() == GamePhase.FINISHED) {
+            return;
+        }
+
         room.setPhase(GamePhase.FINISHED);
 
         String winner = null;
@@ -358,6 +372,7 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
                 UserSession session = (UserSession) users.get(username);
                 if (session != null) {
                     try {
+                        room.clearTurnShots();
                         GameStatusDTO status = buildStatus(room, session, "Partida terminada. Ganador: " + winner);
                         status.finished = true;
                         status.winner = winner;

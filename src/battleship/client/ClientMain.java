@@ -156,6 +156,7 @@ public class ClientMain {
 
         boolean ok = true;
         ok &= board.placeShip(new Ship(ShipType.BOAT, new Coordinate(0, 0), Orientation.HORIZONTAL));
+        /*
         ok &= board.placeShip(new Ship(ShipType.BOAT, new Coordinate(0, 3), Orientation.HORIZONTAL));
         ok &= board.placeShip(new Ship(ShipType.BOAT, new Coordinate(0, 6), Orientation.HORIZONTAL));
         ok &= board.placeShip(new Ship(ShipType.BOAT, new Coordinate(2, 0), Orientation.HORIZONTAL));
@@ -168,6 +169,8 @@ public class ClientMain {
         ok &= board.placeShip(new Ship(ShipType.CRUISER, new Coordinate(8, 0), Orientation.HORIZONTAL));
 
         ok &= board.placeShip(new Ship(ShipType.AIRCRAFTCARRIER, new Coordinate(8, 5), Orientation.HORIZONTAL));
+
+         */
 
         return ok ? board : null;
     }
