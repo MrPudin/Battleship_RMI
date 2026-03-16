@@ -130,6 +130,9 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         RoomRole role = room.getUsers().get(username);
         room.removeUser(username);
         session.setRoomName(null);
+        if (role == RoomRole.PLAYER) {
+            finalizeGameIfNeeded(room);
+        }
 
         if (room.isEmpty()) {
             rooms.remove(roomName);
@@ -264,6 +267,27 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
 
         return true;
     }
+    private void finalizeGameIfNeeded(Room room) throws RemoteException {
+        if (room.getAlivePlayers().size() > 1) {
+            return;
+        }
+
+        room.setPhase(GamePhase.FINISHED);
+
+        String winner = null;
+        for (String survivor : room.getAlivePlayers()) {
+            winner = survivor;
+            break;
+        }
+
+        if (winner != null) {
+            notifyRoom(room, "Partida terminada. Ganador: " + winner);
+            sendLog("Sala " + room.getName() + " -> FINISHED. Ganador: " + winner);
+        } else {
+            notifyRoom(room, "Partida terminada sin ganador.");
+            sendLog("Sala " + room.getName() + " -> FINISHED sin ganador");
+        }
+    }
 
     private void resolveTurn(Room room) throws RemoteException {
         Map<String, Coordinate> shots = new HashMap<>(room.getCurrentTurnShots());
@@ -343,27 +367,14 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
 
         room.clearTurnShots();
 
-        if (room.getAlivePlayers().size() <= 1) {
-            room.setPhase(GamePhase.FINISHED);
-
-            String winner = null;
-            for (String survivor : room.getAlivePlayers()) {
-                winner = survivor;
-                break;
-            }
-
-            if (winner != null) {
-                notifyRoom(room, "Partida terminada. Ganador: " + winner);
-                sendLog("Sala " + room.getName() + " -> FINISHED. Ganador: " + winner);
-            } else {
-                notifyRoom(room, "Partida terminada sin ganador.");
-                sendLog("Sala " + room.getName() + " -> FINISHED sin ganador");
-            }
-
+        finalizeGameIfNeeded(room);
+        if (room.getPhase() == GamePhase.FINISHED) {
             return;
         }
 
         notifyRoom(room, "Turno resuelto. Comienza un nuevo turno.");
         sendLog("Sala " + room.getName() + " -> turno resuelto, nuevo turno iniciado");
     }
+
+
 }
