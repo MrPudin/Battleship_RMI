@@ -127,6 +127,7 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             return false;
         }
 
+        RoomRole role = room.getUsers().get(username);
         room.removeUser(username);
         session.setRoomName(null);
 
@@ -134,6 +135,11 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             rooms.remove(roomName);
             sendLog("LeaveRoom -> Ok, sala eliminada: " + roomName);
         } else {
+            if (role != null) {
+                notifyRoom(room, "El usuario " + username + " ha abandonado la sala (" + role + ").");
+            } else {
+                notifyRoom(room, "El usuario " + username + " ha abandonado la sala.");
+            }
             sendLog("LeaveRoom -> Ok");
         }
 
