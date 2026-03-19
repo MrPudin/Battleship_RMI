@@ -113,7 +113,7 @@ public class TerminalUI {
 
     private static List<String> buildOwnBoard(Board board) {
         List<String> lines = new ArrayList<>();
-        lines.add(headerRow(false));
+        lines.add(headerRow(true));
 
         for (int r = 0; r < Board.SIZE; r++) {
             StringBuilder line = new StringBuilder();
