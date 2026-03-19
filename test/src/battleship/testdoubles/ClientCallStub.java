@@ -19,6 +19,7 @@ public class ClientCallStub implements ClientCallback {
     private final List<String> messages = new ArrayList<>();
     private final Queue<ShotResolutionDTO> queuedShotResults = new ArrayDeque<>();
     private boolean lost = false;
+    private boolean turnResolvedNotified;
 
     @Override
     public void notifyGameStatus(GameStatusDTO status) throws RemoteException {
@@ -108,5 +109,11 @@ public class ClientCallStub implements ClientCallback {
 
     public void clearMessages() {
         messages.clear();
+    }
+    
+    @Override
+    public void notifyTurnResolved() throws RemoteException {
+        turnResolvedNotified = true;
+        messages.add("TURN_RESOLVED");
     }
 }

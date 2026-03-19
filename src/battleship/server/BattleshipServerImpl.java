@@ -340,6 +340,18 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         }
     }
 
+    private void notifyRoomTurnResolved(Room room) {
+        for (String username : room.getUsers().keySet()) {
+            UserSession session = users.get(username);
+            if (session != null) {
+                try {
+                    session.getCallback().notifyTurnResolved();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
     private void notifyUser(UserSession session, Room room, String message) {
         if (session == null) {
             return;
@@ -487,6 +499,8 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             ShipDTO shotDto = buildShotDTO(shot, result, sunkEvents);
             notifyRoomTurnResult(room, shooter, shotDto, sunkEvents);
         }
+
+        notifyRoomTurnResolved(room);
 
         room.clearTurnShots();
 

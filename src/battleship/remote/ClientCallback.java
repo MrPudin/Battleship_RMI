@@ -13,6 +13,8 @@ public interface ClientCallback extends Remote {
 
     void notifyTurnResult(String shooter, ShipDTO shot, List<String> details) throws RemoteException;
 
+    void notifyTurnResolved() throws RemoteException;
+
     void notifyLog(String message) throws RemoteException;
 
     ShotResolutionDTO resolveIncomingShot(int row, int column) throws RemoteException;

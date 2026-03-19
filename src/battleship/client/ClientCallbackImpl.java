@@ -9,22 +9,42 @@ import battleship.remote.ClientCallback;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCallback {
 
+    private final String username;
     private Board localBoard;
+    private GameStatusDTO lastStatus;
 
-    public ClientCallbackImpl() throws RemoteException {
-        super();
-    }
+    private final List<String> eventLog = new ArrayList<>();
+    private final Map<String, String> firedShots = new LinkedHashMap<>();
 
-    public ClientCallbackImpl(int serverPort) throws RemoteException {
-        super(serverPort);
+    private final Map<String, String> pendingResolvedShots = new LinkedHashMap<>();
+    private final List<String> pendingTurnEvents = new ArrayList<>();
+
+    public ClientCallbackImpl(String username, int callbackPort) throws RemoteException {
+        super(callbackPort);
+        this.username = username;
     }
 
     public void setLocalBoard(Board localBoard) {
         this.localBoard = localBoard;
+        if (localBoard != null) {
+            addEvent("Tablero local actualizado.");
+        } else {
+            addEvent("Tablero local limpiado.");
+        }
+        render();
+    }
+
+    public void registerPendingShot(int row, int col) {
+        firedShots.put(key(row, col), "PENDIENTE");
+        addEvent("Disparo enviado a (" + row + "," + col + "), pendiente de resolución.");
+        render();
     }
 
     @Override
@@ -33,47 +53,13 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
             return;
         }
 
-        System.out.println("\n================ ESTADO ================");
+        this.lastStatus = status;
 
         if (status.message != null && !status.message.isBlank()) {
-            System.out.println("Mensaje: " + status.message);
+            addEvent(status.message);
         }
 
-        if (status.roomName != null) {
-            System.out.println("Sala: " + status.roomName);
-        }
-
-        if (status.phase != null) {
-            System.out.println("Fase: " + status.phase);
-        }
-
-        if (status.yourRole != null) {
-            System.out.println("Tu rol: " + status.yourRole);
-        }
-
-        System.out.println("Sigues vivo: " + (status.youAreAlive ? "Sí" : "No"));
-        System.out.println("Empezada: " + (status.started ? "Sí" : "No"));
-        System.out.println("Terminada: " + (status.finished ? "Sí" : "No"));
-
-        if (status.winner != null && !status.winner.isBlank()) {
-            System.out.println("Ganador: " + status.winner);
-        }
-
-        System.out.println("Jugadores actuales: " + status.currentPlayers + "/" + status.maxPlayers);
-
-        if (status.allUsers != null && !status.allUsers.isEmpty()) {
-            System.out.println("Usuarios en sala: " + String.join(", ", status.allUsers));
-        }
-
-        if (status.alivePlayers != null && !status.alivePlayers.isEmpty()) {
-            System.out.println("Jugadores vivos: " + String.join(", ", status.alivePlayers));
-        }
-
-        if (status.readyPlayers != null && !status.readyPlayers.isEmpty()) {
-            System.out.println("Jugadores listos: " + String.join(", ", status.readyPlayers));
-        }
-
-        System.out.println("========================================");
+        render();
     }
 
     @Override
@@ -82,13 +68,30 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
             return;
         }
 
-        System.out.println("Disparo de " + shooter + " en (" + shot.row + "," + shot.column + ") -> " + shot.type);
-
-        if (details != null) {
-            for (String detail : details) {
-                System.out.println("  " + detail);
-            }
+        if (shooter != null && shooter.equals(username)) {
+            pendingResolvedShots.put(key(shot.row, shot.column), shot.type);
         }
+
+        pendingTurnEvents.add("Disparo de " + shooter + " en (" + shot.row + "," + shot.column + ") -> " + shot.type);
+
+        if (details != null && !details.isEmpty()) {
+            pendingTurnEvents.addAll(details);
+        }
+    }
+
+    @Override
+    public void notifyTurnResolved() throws RemoteException {
+        for (Map.Entry<String, String> entry : pendingResolvedShots.entrySet()) {
+            firedShots.put(entry.getKey(), entry.getValue());
+        }
+        pendingResolvedShots.clear();
+
+        for (String event : pendingTurnEvents) {
+            addEvent(event);
+        }
+        pendingTurnEvents.clear();
+
+        render();
     }
 
     @Override
@@ -96,7 +99,9 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
         if (message == null || message.isBlank()) {
             return;
         }
-        System.out.println(message);
+
+        addEvent(message);
+        render();
     }
 
     @Override
@@ -104,11 +109,29 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
         if (localBoard == null) {
             return null;
         }
-        return localBoard.shootDetailed(new Coordinate(row, column));
+
+        ShotResolutionDTO resolution = localBoard.shootDetailed(new Coordinate(row, column));
+        addEvent("Has recibido un disparo en (" + row + "," + column + ") -> " + resolution.result);
+        render();
+        return resolution;
     }
 
     @Override
     public boolean hasLost() throws RemoteException {
         return localBoard != null && localBoard.allSunk();
+    }
+
+    private void render() {
+        TerminalUI.render(username, localBoard, firedShots, eventLog, lastStatus);
+    }
+
+    private void addEvent(String message) {
+        if (message != null && !message.isBlank()) {
+            eventLog.add(message);
+        }
+    }
+
+    private String key(int row, int col) {
+        return row + "," + col;
     }
 }

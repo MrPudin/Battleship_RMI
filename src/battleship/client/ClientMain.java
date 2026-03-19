@@ -37,7 +37,7 @@ public class ClientMain {
                 return;
             }
 
-            ClientCallbackImpl callback = new ClientCallbackImpl(callbackPort);
+            ClientCallbackImpl callback = new ClientCallbackImpl(username, callbackPort);
             boolean registered = server.registerPlayer(username, callback);
 
             if (!registered) {
@@ -45,25 +45,16 @@ public class ClientMain {
                 return;
             }
 
-            System.out.println("Usuario registrado correctamente");
+            callback.notifyLog("Cliente conectado. Crea o únete a una sala para empezar.");
 
             boolean running = true;
 
             while (running) {
-                System.out.println("\n===== MENÚ =====");
-                System.out.println("1. NewRoom");
-                System.out.println("2. JoinRoom");
-                System.out.println("3. LeaveRoom");
-                System.out.println("4. Colocar barcos localmente");
-                System.out.println("5. Marcar listo");
-                System.out.println("6. Enviar disparo");
-                System.out.println("0. Exit");
-                System.out.print("Opción: ");
-
+                System.out.print("\nOpción> ");
                 String option = sc.nextLine().trim();
 
                 switch (option) {
-                    case "1":
+                    case "1" -> {
                         System.out.print("Nombre de la sala: ");
                         String roomName = sc.nextLine().trim();
 
@@ -72,15 +63,15 @@ public class ClientMain {
                         try {
                             maxPlayers = Integer.parseInt(sc.nextLine().trim());
                         } catch (NumberFormatException e) {
-                            System.out.println("Número inválido");
+                            callback.notifyLog("Número inválido");
                             break;
                         }
 
                         boolean created = server.newRoom(username, roomName, maxPlayers);
-                        System.out.println(created ? "Sala creada correctamente" : "No se pudo crear la sala");
-                        break;
+                        callback.notifyLog(created ? "Sala creada correctamente" : "No se pudo crear la sala");
+                    }
 
-                    case "2":
+                    case "2" -> {
                         System.out.print("Nombre de la sala: ");
                         String joinRoomName = sc.nextLine().trim();
 
@@ -88,45 +79,45 @@ public class ClientMain {
                         String role = sc.nextLine().trim().toUpperCase();
 
                         boolean joined = server.joinRoom(username, joinRoomName, role);
-                        System.out.println(joined ? "Te has unido a la sala" : "No se pudo unir a la sala");
-                        break;
+                        callback.notifyLog(joined ? "Te has unido a la sala" : "No se pudo unir a la sala");
+                    }
 
-                    case "3":
+                    case "3" -> {
                         boolean left = server.leaveRoom(username);
                         if (left) {
                             localBoard = null;
                             callback.setLocalBoard(null);
                         }
-                        System.out.println(left ? "Has salido de la sala" : "No se pudo salir de la sala");
-                        break;
+                        callback.notifyLog(left ? "Has salido de la sala" : "No se pudo salir de la sala");
+                    }
 
-                    case "4":
+                    case "4" -> {
                         localBoard = buildDefaultBoard();
                         if (localBoard != null) {
                             callback.setLocalBoard(localBoard);
-                            System.out.println("Barcos colocados localmente en el cliente");
+                            callback.notifyLog("Barcos colocados localmente en el cliente");
                         } else {
-                            System.out.println("No se pudo colocar el tablero local");
+                            callback.notifyLog("No se pudo colocar el tablero local");
                         }
-                        break;
+                    }
 
-                    case "5":
+                    case "5" -> {
                         if (localBoard == null) {
-                            System.out.println("Primero debes colocar los barcos localmente");
+                            callback.notifyLog("Primero debes colocar los barcos localmente");
                             break;
                         }
 
                         boolean ready = server.playerReady(username);
-                        System.out.println(ready ? "Marcado como listo" : "No se pudo marcar como listo");
-                        break;
+                        callback.notifyLog(ready ? "Marcado como listo" : "No se pudo marcar como listo");
+                    }
 
-                    case "6":
+                    case "6" -> {
                         System.out.print("Fila: ");
                         int row;
                         try {
                             row = Integer.parseInt(sc.nextLine().trim());
                         } catch (NumberFormatException e) {
-                            System.out.println("Fila inválida");
+                            callback.notifyLog("Fila inválida");
                             break;
                         }
 
@@ -135,22 +126,25 @@ public class ClientMain {
                         try {
                             col = Integer.parseInt(sc.nextLine().trim());
                         } catch (NumberFormatException e) {
-                            System.out.println("Columna inválida");
+                            callback.notifyLog("Columna inválida");
                             break;
                         }
 
                         boolean shotSubmitted = server.submitShot(username, row, col);
-                        System.out.println(shotSubmitted ? "Disparo enviado" : "No se pudo enviar el disparo");
-                        break;
+                        if (shotSubmitted) {
+                            callback.registerPendingShot(row, col);
+                        } else {
+                            callback.notifyLog("No se pudo enviar el disparo");
+                        }
+                    }
 
-                    case "0":
+                    case "0" -> {
                         boolean exited = server.exit(username);
-                        System.out.println(exited ? "Sesión cerrada" : "No se pudo cerrar la sesión");
+                        callback.notifyLog(exited ? "Sesión cerrada" : "No se pudo cerrar la sesión");
                         running = false;
-                        break;
+                    }
 
-                    default:
-                        System.out.println("Opción inválida");
+                    default -> callback.notifyLog("Opción inválida");
                 }
             }
         } catch (Exception e) {
@@ -161,7 +155,12 @@ public class ClientMain {
     private static Board buildDefaultBoard() {
         Board board = new Board();
         boolean ok = true;
+
         ok &= board.placeShip(new Ship(ShipType.BOAT, new Coordinate(0, 0), Orientation.HORIZONTAL));
+        ok &= board.placeShip(new Ship(ShipType.FRIGATE, new Coordinate(2, 2), Orientation.HORIZONTAL));
+        ok &= board.placeShip(new Ship(ShipType.CRUISER, new Coordinate(5, 0), Orientation.HORIZONTAL));
+        ok &= board.placeShip(new Ship(ShipType.AIRCRAFTCARRIER, new Coordinate(7, 4), Orientation.HORIZONTAL));
+
         return ok ? board : null;
     }
 }
