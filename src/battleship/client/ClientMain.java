@@ -130,10 +130,12 @@ public class ClientMain {
                             break;
                         }
 
+                        callback.registerPendingShot(row, col);
+
                         boolean shotSubmitted = server.submitShot(username, row, col);
-                        if (shotSubmitted) {
-                            callback.registerPendingShot(row, col);
-                        } else {
+
+                        if (!shotSubmitted) {
+                            callback.cancelPendingShot(row, col);
                             callback.notifyLog("No se pudo enviar el disparo");
                         }
                     }

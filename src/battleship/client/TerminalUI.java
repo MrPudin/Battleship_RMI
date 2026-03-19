@@ -45,15 +45,13 @@ public class TerminalUI {
 
             int maxLines = Math.max(ownBoard.size(), enemyBoard.size());
 
-            System.out.printf("%-50s | %-48s%n",
-                    BOLD + "TU TABLERO" + RESET,
-                    BOLD + "DISPAROS REALIZADOS" + RESET);
+            System.out.println("TU TABLERO" + "              | " + "DISPAROS REALIZADOS");
             System.out.println("-".repeat(107));
 
             for (int i = 0; i < maxLines; i++) {
                 String left = i < ownBoard.size() ? ownBoard.get(i) : "";
                 String right = i < enemyBoard.size() ? enemyBoard.get(i) : "";
-                System.out.printf("%-50s | %-48s%n", left, right);
+                System.out.println(left + " | " + right);
             }
 
             System.out.println();
@@ -113,7 +111,7 @@ public class TerminalUI {
 
     private static List<String> buildOwnBoard(Board board) {
         List<String> lines = new ArrayList<>();
-        lines.add(headerRow(true));
+        lines.add(headerRow());
 
         for (int r = 0; r < Board.SIZE; r++) {
             StringBuilder line = new StringBuilder();
@@ -142,7 +140,7 @@ public class TerminalUI {
 
     private static List<String> buildEnemyBoard(Map<String, String> firedShots) {
         List<String> lines = new ArrayList<>();
-        lines.add(headerRow(true));
+        lines.add(headerRow());
 
         for (int r = 0; r < Board.SIZE; r++) {
             StringBuilder line = new StringBuilder();
@@ -170,8 +168,8 @@ public class TerminalUI {
         return lines;
     }
 
-    private static String headerRow(boolean compact) {
-        StringBuilder sb = new StringBuilder(compact ? "  " : "   ");
+    private static String headerRow() {
+        StringBuilder sb = new StringBuilder("   ");
         for (int c = 0; c < Board.SIZE; c++) {
             sb.append(c).append(' ');
         }

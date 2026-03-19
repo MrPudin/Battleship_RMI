@@ -1,8 +1,8 @@
 package battleship.client;
 
 import battleship.dto.GameStatusDTO;
-import battleship.dto.ShipDTO;
 import battleship.dto.ShotResolutionDTO;
+import battleship.dto.TurnShotResultDTO;
 import battleship.model.Board;
 import battleship.model.Coordinate;
 import battleship.remote.ClientCallback;
@@ -22,9 +22,6 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
 
     private final List<String> eventLog = new ArrayList<>();
     private final Map<String, String> firedShots = new LinkedHashMap<>();
-
-    private final Map<String, String> pendingResolvedShots = new LinkedHashMap<>();
-    private final List<String> pendingTurnEvents = new ArrayList<>();
 
     public ClientCallbackImpl(String username, int callbackPort) throws RemoteException {
         super(callbackPort);
@@ -48,7 +45,7 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
     }
 
     @Override
-    public void notifyGameStatus(GameStatusDTO status) throws RemoteException {
+    public synchronized void notifyGameStatus(GameStatusDTO status) throws RemoteException {
         if (status == null) {
             return;
         }
@@ -63,39 +60,34 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
     }
 
     @Override
-    public void notifyTurnResult(String shooter, ShipDTO shot, List<String> details) throws RemoteException {
-        if (shot == null) {
+    public synchronized void notifyTurnBatch(List<TurnShotResultDTO> results) throws RemoteException {
+        if (results == null || results.isEmpty()) {
             return;
         }
 
-        if (shooter != null && shooter.equals(username)) {
-            pendingResolvedShots.put(key(shot.row, shot.column), shot.type);
-        }
+        for (TurnShotResultDTO result : results) {
+            if (result == null || result.shot == null) {
+                continue;
+            }
 
-        pendingTurnEvents.add("Disparo de " + shooter + " en (" + shot.row + "," + shot.column + ") -> " + shot.type);
+            if (result.shooter != null && result.shooter.equals(username)) {
+                firedShots.put(key(result.shot.row, result.shot.column), result.shot.type);
+            }
 
-        if (details != null && !details.isEmpty()) {
-            pendingTurnEvents.addAll(details);
-        }
-    }
+            addEvent("Disparo de " + result.shooter + " en (" + result.shot.row + "," + result.shot.column + ") -> " + result.shot.type);
 
-    @Override
-    public void notifyTurnResolved() throws RemoteException {
-        for (Map.Entry<String, String> entry : pendingResolvedShots.entrySet()) {
-            firedShots.put(entry.getKey(), entry.getValue());
+            if (result.details != null && !result.details.isEmpty()) {
+                for (String detail : result.details) {
+                    addEvent(detail);
+                }
+            }
         }
-        pendingResolvedShots.clear();
-
-        for (String event : pendingTurnEvents) {
-            addEvent(event);
-        }
-        pendingTurnEvents.clear();
 
         render();
     }
 
     @Override
-    public void notifyLog(String message) throws RemoteException {
+    public synchronized void notifyLog(String message) throws RemoteException {
         if (message == null || message.isBlank()) {
             return;
         }
@@ -105,7 +97,7 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
     }
 
     @Override
-    public ShotResolutionDTO resolveIncomingShot(int row, int column) throws RemoteException {
+    public synchronized ShotResolutionDTO resolveIncomingShot(int row, int column) throws RemoteException {
         if (localBoard == null) {
             return null;
         }
@@ -116,8 +108,14 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
         return resolution;
     }
 
+    public synchronized void cancelPendingShot(int row, int col) {
+        firedShots.remove(key(row, col));
+        addEvent("Se canceló el disparo en (" + row + "," + col + ").");
+        render();
+    }
+
     @Override
-    public boolean hasLost() throws RemoteException {
+    public synchronized boolean hasLost() throws RemoteException {
         return localBoard != null && localBoard.allSunk();
     }
 
@@ -134,4 +132,6 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
     private String key(int row, int col) {
         return row + "," + col;
     }
+
+
 }

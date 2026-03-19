@@ -3,6 +3,7 @@ package src.battleship.testdoubles;
 import battleship.dto.GameStatusDTO;
 import battleship.dto.ShipDTO;
 import battleship.dto.ShotResolutionDTO;
+import battleship.dto.TurnShotResultDTO;
 import battleship.model.ResultantShot;
 import battleship.model.ShipType;
 import battleship.remote.ClientCallback;
@@ -32,27 +33,10 @@ public class ClientCallStub implements ClientCallback {
     }
 
     @Override
-    public void notifyTurnResult(String shooter, ShipDTO shot, List<String> details) throws RemoteException {
-        if (shot == null) {
-            return;
-        }
+    public void notifyTurnBatch(List<TurnShotResultDTO> results) throws RemoteException {
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("Resultado del disparo de ")
-                .append(shooter)
-                .append(" en (")
-                .append(shot.row)
-                .append(",")
-                .append(shot.column)
-                .append("): ")
-                .append(shot.type);
-
-        if (details != null && !details.isEmpty()) {
-            sb.append(" -> ").append(String.join(" | ", details));
-        }
-
-        messages.add(sb.toString());
     }
+
 
     @Override
     public void notifyLog(String message) throws RemoteException {
@@ -110,8 +94,7 @@ public class ClientCallStub implements ClientCallback {
     public void clearMessages() {
         messages.clear();
     }
-    
-    @Override
+
     public void notifyTurnResolved() throws RemoteException {
         turnResolvedNotified = true;
         messages.add("TURN_RESOLVED");

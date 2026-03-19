@@ -1,8 +1,6 @@
 package battleship.server;
 
-import battleship.dto.GameStatusDTO;
-import battleship.dto.ShipDTO;
-import battleship.dto.ShotResolutionDTO;
+import battleship.dto.*;
 import battleship.model.*;
 import battleship.remote.BattleshipServer;
 import battleship.remote.ClientCallback;
@@ -328,24 +326,12 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         }
     }
 
-    private void notifyRoomTurnResult(Room room, String shooter, ShipDTO shot, List<String> details) {
+    private void notifyRoomTurnBatch(Room room, List<TurnShotResultDTO> results) {
         for (String username : room.getUsers().keySet()) {
             UserSession session = users.get(username);
             if (session != null) {
                 try {
-                    session.getCallback().notifyTurnResult(shooter, shot, details);
-                } catch (Exception ignored) {
-                }
-            }
-        }
-    }
-
-    private void notifyRoomTurnResolved(Room room) {
-        for (String username : room.getUsers().keySet()) {
-            UserSession session = users.get(username);
-            if (session != null) {
-                try {
-                    session.getCallback().notifyTurnResolved();
+                    session.getCallback().notifyTurnBatch(results);
                 } catch (Exception ignored) {
                 }
             }
@@ -490,6 +476,8 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             sendLog("Sala " + room.getName() + " -> jugador derrotado: " + defeated);
         }
 
+        List<TurnShotResultDTO> batchResults = new ArrayList<>();
+
         for (Map.Entry<String, Coordinate> shotEntry : shots.entrySet()) {
             String shooter = shotEntry.getKey();
             Coordinate shot = shotEntry.getValue();
@@ -497,10 +485,10 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             List<String> sunkEvents = sunkEventsByShooter.get(shooter);
 
             ShipDTO shotDto = buildShotDTO(shot, result, sunkEvents);
-            notifyRoomTurnResult(room, shooter, shotDto, sunkEvents);
+            batchResults.add(new TurnShotResultDTO(shooter, shotDto, sunkEvents));
         }
 
-        notifyRoomTurnResolved(room);
+        notifyRoomTurnBatch(room, batchResults);
 
         room.clearTurnShots();
 
