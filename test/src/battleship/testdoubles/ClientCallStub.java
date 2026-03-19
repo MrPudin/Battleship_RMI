@@ -1,7 +1,6 @@
-package src.battleship.testdoubles;
+package battleship.testdoubles;
 
 import battleship.dto.GameStatusDTO;
-import battleship.dto.ShipDTO;
 import battleship.dto.ShotResolutionDTO;
 import battleship.dto.TurnShotResultDTO;
 import battleship.model.ResultantShot;
@@ -20,13 +19,13 @@ public class ClientCallStub implements ClientCallback {
     private final List<String> messages = new ArrayList<>();
     private final Queue<ShotResolutionDTO> queuedShotResults = new ArrayDeque<>();
     private boolean lost = false;
-    private boolean turnResolvedNotified;
 
     @Override
     public void notifyGameStatus(GameStatusDTO status) throws RemoteException {
         if (status == null) {
             return;
         }
+
         if (status.message != null) {
             messages.add(status.message);
         }
@@ -34,9 +33,32 @@ public class ClientCallStub implements ClientCallback {
 
     @Override
     public void notifyTurnBatch(List<TurnShotResultDTO> results) throws RemoteException {
+        if (results == null || results.isEmpty()) {
+            return;
+        }
 
+        for (TurnShotResultDTO result : results) {
+            if (result == null || result.shot == null) {
+                continue;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("Resultado del disparo de ")
+                    .append(result.shooter)
+                    .append(" en (")
+                    .append(result.shot.row)
+                    .append(",")
+                    .append(result.shot.column)
+                    .append("): ")
+                    .append(result.shot.type);
+
+            if (result.details != null && !result.details.isEmpty()) {
+                sb.append(" -> ").append(String.join(" | ", result.details));
+            }
+
+            messages.add(sb.toString());
+        }
     }
-
 
     @Override
     public void notifyLog(String message) throws RemoteException {
@@ -93,10 +115,5 @@ public class ClientCallStub implements ClientCallback {
 
     public void clearMessages() {
         messages.clear();
-    }
-
-    public void notifyTurnResolved() throws RemoteException {
-        turnResolvedNotified = true;
-        messages.add("TURN_RESOLVED");
     }
 }
