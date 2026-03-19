@@ -2,7 +2,9 @@ package src.battleship.testdoubles;
 
 import battleship.dto.GameStatusDTO;
 import battleship.dto.ShipDTO;
+import battleship.dto.ShotResolutionDTO;
 import battleship.model.ResultantShot;
+import battleship.model.ShipType;
 import battleship.remote.ClientCallback;
 
 import java.rmi.RemoteException;
@@ -15,7 +17,7 @@ import java.util.Queue;
 public class ClientCallStub implements ClientCallback {
 
     private final List<String> messages = new ArrayList<>();
-    private final Queue<ResultantShot> queuedShotResults = new ArrayDeque<>();
+    private final Queue<ShotResolutionDTO> queuedShotResults = new ArrayDeque<>();
     private boolean lost = false;
 
     @Override
@@ -59,9 +61,9 @@ public class ClientCallStub implements ClientCallback {
     }
 
     @Override
-    public ResultantShot resolveIncomingShot(int row, int column) throws RemoteException {
+    public ShotResolutionDTO resolveIncomingShot(int row, int column) throws RemoteException {
         if (queuedShotResults.isEmpty()) {
-            return ResultantShot.MISS;
+            return new ShotResolutionDTO(ResultantShot.MISS, false, null, 0);
         }
         return queuedShotResults.poll();
     }
@@ -71,8 +73,16 @@ public class ClientCallStub implements ClientCallback {
         return lost;
     }
 
-    public void enqueueShotResult(ResultantShot result) {
+    public void enqueueShotResult(ShotResolutionDTO result) {
         queuedShotResults.add(result);
+    }
+
+    public void enqueueShotResult(ResultantShot result) {
+        queuedShotResults.add(new ShotResolutionDTO(result, false, null, 0));
+    }
+
+    public void enqueueSunkShotResult(ShipType shipType, int remainingShips) {
+        queuedShotResults.add(new ShotResolutionDTO(ResultantShot.SUNK, true, shipType, remainingShips));
     }
 
     public void setLost(boolean lost) {

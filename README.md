@@ -1,46 +1,43 @@
-# 🚢💥 HundirLaFlota 
+# Battleship RMI
 
-![Build Status](https://travis-ci.org/mariodiazzz11/HundirLaFlota.svg?branch=main)
-![License](https://img.shields.io/badge/license-MIT-blue)
+Aplicación distribuida en Java basada en **RMI (Remote Method Invocation)** para jugar a Battleship desde terminal.
 
-**HundirLaFlota** es una implementación hecha en Java del clásico juego donde dos jugadores se enfrentan para hundir los barcos del otro. El juego se juega únicamente en la consola, sin necesidad de interfaz gráfica.
+El proyecto implementa un sistema cliente-servidor con:
+- registro de usuarios
+- creación y unión a salas
+- roles de `PLAYER`, `SPECTATOR` y `ADMIN`
+- callbacks RMI para estado de juego, resultados de turno y logs
+- fases de partida
+- colocación local de barcos en el cliente
+- envío de disparos y resolución del turno
 
-## 💡 Características
+## Características principales
 
-- Jugador vs Jugador
-- Tablero de 10x10 para cada jugador
-- El jugador puede colocar sus barcos de manera estratégica 🚢
-- Los ataques se realizan por coordenadas en el tablero 🔫
+- **Servidor RMI abierto** con registry y objeto remoto publicados.
+- **Clientes RMI** que se conectan al servidor y registran un callback remoto.
+- **Salas de juego** con número máximo de jugadores.
+- **Roles**:
+  - `PLAYER`
+  - `SPECTATOR`
+  - `ADMIN`
+- **Fases de partida** gestionadas por el servidor:
+  - `WAITING_PLAYERS`
+  - `PLACING_SHIPS`
+  - `PLAYING`
+  - `FINISHED`
+- **Tablero local en cliente**: los barcos se colocan localmente y el cliente resuelve impactos recibidos.
+- **DTO de estado** para mostrar información de la sala y de la partida.
+- **Tests** en la carpeta `test/`.
 
-## 🎮 Cómo jugar
+## Estructura del proyecto
 
-1. **Ejecuta el juego en la consola**:
-   java HundirLaFlota
-2. **Sigue las instrucciones en pantalla para colocar tus barcos y atacar a los del oponente**
-3. **¡El primero en hundir todos los barcos del oponente gana!** 🏆
+```text
+src/battleship/
+├── client/     # Cliente, callback cliente y menú de terminal
+├── dto/        # DTOs de estado y datos intercambiados
+├── model/      # Lógica de dominio: Room, Board, Ship, GamePhase, etc.
+├── remote/     # Interfaces remotas RMI
+└── server/     # Servidor e inicialización del registry
 
-## 📸 Captura de Pantalla
-
-![Captura de pantalla](imagenes/HundirLaFlota.png)
-
-## ⚙️ Requisitos
-
-- Java 8 o superior ☕
-- Consola o terminal para ejecutar el juego 🖥️
-
-## 🔧 Instalación
-
-1. **Clona el repositorio**:
-   git clone https://github.com/mariodiazzz11/HundirLaFlota.git
-2. **Clona el repositorio**:
-   cd HundirLaFlota
-3. **Compila el proyecto (si es necesario)**:
-   javac *.java
-
-## 🚀 Contribuciones
-
-Si deseas contribuir al proyecto, siéntete libre de hacer un fork y enviar pull requests. ¡Toda ayuda es bienvenida! 🤝
-
-## 📄 Licencia
-
-Este proyecto está bajo la licencia MIT. Para más detalles, consulta el archivo LICENSE.
+test/           # Tests del proyecto
+compile.sh      # Script de compilación

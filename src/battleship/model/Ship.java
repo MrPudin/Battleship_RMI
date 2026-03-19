@@ -44,12 +44,21 @@ public class Ship implements Serializable {
 
     public boolean registerImpact(Coordinate c) {
         if (!occupies(c)) return false;
-        boolean alreadyHit = impacts.stream().anyMatch(x -> x.getRow() == c.getRow() && x.getColumn() == c.getColumn());
-        if (!alreadyHit) impacts.add(c);
+
+        boolean alreadyHit = impacts.stream()
+                .anyMatch(x -> x.getRow() == c.getRow() && x.getColumn() == c.getColumn());
+
+        if (!alreadyHit) {
+            impacts.add(c);
+        }
         return true;
     }
 
     public boolean isSunk() {
         return impacts.size() == type.getSize();
+    }
+
+    public int getImpactCount() {
+        return impacts.size();
     }
 }

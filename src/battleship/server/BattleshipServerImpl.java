@@ -2,13 +2,15 @@ package battleship.server;
 
 import battleship.dto.GameStatusDTO;
 import battleship.dto.ShipDTO;
+import battleship.dto.ShotResolutionDTO;
 import battleship.model.*;
 import battleship.remote.BattleshipServer;
 import battleship.remote.ClientCallback;
 
-
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -16,6 +18,8 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
 
     private final Map<String, UserSession> users = new ConcurrentHashMap<>();
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
+
+    private static final DateTimeFormatter LOG_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     public BattleshipServerImpl() throws RemoteException {
         super();
@@ -27,7 +31,15 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
 
     @Override
     public synchronized boolean registerPlayer(String username, ClientCallback callback) throws RemoteException {
-        if (users.containsKey(username)) return false;
+        if (username == null || username.isBlank() || callback == null) {
+            sendLog("Usuario inválido conectado -> Error");
+            return false;
+        }
+
+        if (users.containsKey(username)) {
+            sendLog("Usuario " + username + " conectado -> Error usuario duplicado");
+            return false;
+        }
 
         users.put(username, new UserSession(username, callback));
         sendLog("Usuario " + username + " conectado -> Ok");
@@ -110,6 +122,7 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
 
         session.setRoomName(roomName);
         notifyUser(session, room, "Conectado a sala: " + roomName + " como " + roomRole);
+        notifyRoom(room, "El usuario " + username + " se ha unido a la sala como " + roomRole + ".");
         sendLog("JoinRoom " + roomName + " -> Ok");
 
         checkStartGame(room);
@@ -136,6 +149,7 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         RoomRole role = room.getUsers().get(username);
         room.removeUser(username);
         session.setRoomName(null);
+
         if (role == RoomRole.PLAYER) {
             finalizeGameIfNeeded(room);
         }
@@ -144,11 +158,8 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             rooms.remove(roomName);
             sendLog("LeaveRoom -> Ok, sala eliminada: " + roomName);
         } else {
-            if (role != null) {
-                notifyRoom(room, "El usuario " + username + " ha abandonado la sala (" + role + ").");
-            } else {
-                notifyRoom(room, "El usuario " + username + " ha abandonado la sala.");
-            }
+            notifyRoom(room, "El usuario " + username + " ha abandonado la sala" +
+                    (role != null ? " (" + role + ")." : "."));
             sendLog("LeaveRoom -> Ok");
         }
 
@@ -172,6 +183,86 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         return true;
     }
 
+    @Override
+    public synchronized boolean playerReady(String username) throws RemoteException {
+        UserSession session = users.get(username);
+        if (session == null || !session.isInRoom()) {
+            sendLog("PlayerReady -> Error usuario no está en una sala");
+            return false;
+        }
+
+        Room room = rooms.get(session.getRoomName());
+        if (room == null) {
+            sendLog("PlayerReady -> Error sala inexistente");
+            return false;
+        }
+
+        if (room.getPhase() == GamePhase.FINISHED) {
+            sendLog("PlayerReady " + username + " -> Error la partida ya ha terminado");
+            return false;
+        }
+
+        boolean ready = room.markPlayerReady(username);
+        if (!ready) {
+            sendLog("PlayerReady " + username + " -> Error no permitido en esta fase o rol");
+            return false;
+        }
+
+        notifyRoom(room, "El jugador " + username + " ya ha colocado sus barcos.");
+        sendLog("PlayerReady " + username + " -> Ok");
+
+        if (room.areAllPlayersReady()) {
+            room.setPhase(GamePhase.PLAYING);
+            room.resetReadyPlayers();
+            notifyRoom(room, "Todos los jugadores han colocado sus barcos. La partida empieza.");
+            sendLog("Sala " + room.getName() + " -> fase PLAYING");
+        }
+
+        return true;
+    }
+
+    @Override
+    public synchronized boolean submitShot(String username, int row, int column) throws RemoteException {
+        UserSession session = users.get(username);
+        if (session == null || !session.isInRoom()) {
+            sendLog("SubmitShot -> Error usuario no está en una sala");
+            return false;
+        }
+
+        if (!isValidCoordinate(row, column)) {
+            sendLog("SubmitShot " + username + " (" + row + "," + column + ") -> Error coordenada inválida");
+            return false;
+        }
+
+        Room room = rooms.get(session.getRoomName());
+        if (room == null) {
+            sendLog("SubmitShot -> Error sala inexistente");
+            return false;
+        }
+
+        if (room.getPhase() == GamePhase.FINISHED) {
+            sendLog("SubmitShot " + username + " -> Error la partida ya ha terminado");
+            return false;
+        }
+
+        boolean submitted = room.submitShot(username, new Coordinate(row, column));
+        if (!submitted) {
+            sendLog("SubmitShot " + username + " -> Error no permitido en esta fase, rol o turno");
+            return false;
+        }
+
+        notifyRoom(room, "El jugador " + username + " ha enviado su disparo.");
+        sendLog("SubmitShot " + username + " (" + row + "," + column + ") -> Ok");
+
+        if (room.haveAllAlivePlayersSubmittedShot()) {
+            notifyRoom(room, "Todos los jugadores han enviado su disparo. Resolviendo turno...");
+            sendLog("Sala " + room.getName() + " -> todos los disparos del turno recibidos");
+            resolveTurn(room);
+        }
+
+        return true;
+    }
+
     private void checkStartGame(Room room) throws RemoteException {
         if (room.getPhase() == GamePhase.WAITING_PLAYERS && room.isFullForPlayers()) {
             room.setPhase(GamePhase.PLACING_SHIPS);
@@ -190,44 +281,43 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
 
         status.roomName = room.getName();
         status.phase = room.getPhase().name();
-
         status.started = room.getPhase() != GamePhase.WAITING_PLAYERS;
         status.finished = room.getPhase() == GamePhase.FINISHED;
-
         status.maxPlayers = room.getMaxPlayers();
         status.currentPlayers = room.countPlayers();
 
-        for (Object usernameObj : room.getUsers().keySet()) {
-            status.allUsers.add((String) usernameObj);
-        }
-
-        for (Object aliveObj : room.getAlivePlayers()) {
-            status.alivePlayers.add((String) aliveObj);
-        }
-
-        for (Object readyObj : room.getReadyPlayers()) {
-            status.readyPlayers.add((String) readyObj);
-        }
+        status.allUsers.addAll(room.getUsers().keySet());
+        status.alivePlayers.addAll(room.getAlivePlayers());
+        status.readyPlayers.addAll(room.getReadyPlayers());
 
         if (viewer != null) {
             String viewerUsername = viewer.getUsername();
-            Object role = room.getUsers().get(viewerUsername);
-            status.yourRole = role != null ? role.toString() : "NONE";
+            RoomRole role = room.getUsers().get(viewerUsername);
+            status.yourRole = role != null ? role.name() : "NONE";
             status.youAreAlive = room.getAlivePlayers().contains(viewerUsername);
         }
 
         return status;
     }
 
-    private ShipDTO buildShotDTO(Coordinate shot, ResultantShot result) {
-        return new ShipDTO(result.toString(), shot.getRow(), shot.getColumn(), "");
+    private ShipDTO buildShotDTO(Coordinate shot, ResultantShot result, List<String> sunkEvents) {
+        String publicResult;
+        switch (result) {
+            case SUNK -> publicResult = "HUNDIDO";
+            case HIT -> publicResult = "TOCADO";
+            default -> publicResult = "AGUA";
+        }
+
+        ShipDTO dto = new ShipDTO(publicResult, shot.getRow(), shot.getColumn(), "");
+        if (sunkEvents != null) {
+            dto.sunkEvents.addAll(sunkEvents);
+        }
+        return dto;
     }
 
     private void notifyRoom(Room room, String message) {
-        for (Object usernameObj : room.getUsers().keySet()) {
-            String username = (String) usernameObj;
-            UserSession session = (UserSession) users.get(username);
-
+        for (String username : room.getUsers().keySet()) {
+            UserSession session = users.get(username);
             if (session != null) {
                 try {
                     GameStatusDTO status = buildStatus(room, session, message);
@@ -263,6 +353,8 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
     }
 
     private void sendLog(String message) {
+        String timedMessage = LocalTime.now().format(LOG_TIME_FORMAT) + " [Admin:Logs] " + message;
+
         for (UserSession session : users.values()) {
             if (!session.isInRoom()) continue;
 
@@ -273,86 +365,13 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
             RoomRole role = room.getUsers().get(session.getUsername());
             if (role == RoomRole.ADMIN) {
                 try {
-                    session.getCallback().notifyLog("[Admin:Logs] " + message);
+                    session.getCallback().notifyLog(timedMessage);
                 } catch (Exception ignored) {
                 }
             }
         }
     }
 
-    @Override
-    public synchronized boolean playerReady(String username) throws RemoteException {
-        UserSession session = users.get(username);
-        if (session == null || !session.isInRoom()) {
-            sendLog("PlayerReady -> Error usuario no está en una sala");
-            return false;
-        }
-
-        Room room = rooms.get(session.getRoomName());
-        if (room == null) {
-            sendLog("PlayerReady -> Error sala inexistente");
-            return false;
-        }
-
-        if (room.getPhase() == GamePhase.FINISHED) {
-            sendLog("PlayerReady " + username + " -> Error la partida ya ha terminado");
-            return false;
-        }
-
-        boolean ready = room.markPlayerReady(username);
-        if (!ready) {
-            sendLog("PlayerReady " + username + " -> Error no permitido en esta fase o rol");
-            return false;
-        }
-
-        notifyRoom(room, "El jugador " + username + " ya ha colocado sus barcos.");
-        sendLog("PlayerReady " + username + " -> Ok");
-
-        if (room.areAllPlayersReady()) {
-            room.setPhase(GamePhase.PLAYING);
-            notifyRoom(room, "Todos los jugadores han colocado sus barcos. La partida empieza.");
-            sendLog("Sala " + room.getName() + " -> fase PLAYING");
-        }
-
-        return true;
-    }
-
-    @Override
-    public synchronized boolean submitShot(String username, int row, int column) throws RemoteException {
-        UserSession session = users.get(username);
-        if (session == null || !session.isInRoom()) {
-            sendLog("SubmitShot -> Error usuario no está en una sala");
-            return false;
-        }
-
-        Room room = rooms.get(session.getRoomName());
-        if (room == null) {
-            sendLog("SubmitShot -> Error sala inexistente");
-            return false;
-        }
-
-        if (room.getPhase() == GamePhase.FINISHED) {
-            sendLog("PlayerReady " + username + " -> Error la partida ya ha terminado");
-            return false;
-        }
-
-        boolean submitted = room.submitShot(username, new Coordinate(row, column));
-        if (!submitted) {
-            sendLog("SubmitShot " + username + " -> Error no permitido en esta fase, rol o turno");
-            return false;
-        }
-
-        notifyRoom(room, "El jugador " + username + " ha enviado su disparo.");
-        sendLog("SubmitShot " + username + " (" + row + "," + column + ") -> Ok");
-
-        if (room.haveAllAlivePlayersSubmittedShot()) {
-            notifyRoom(room, "Todos los jugadores han enviado su disparo. Resolviendo turno...");
-            sendLog("Sala " + room.getName() + " -> todos los disparos del turno recibidos");
-            resolveTurn(room);
-        }
-
-        return true;
-    }
     private void finalizeGameIfNeeded(Room room) throws RemoteException {
         if (room.getAlivePlayers().size() > 1) {
             return;
@@ -365,15 +384,14 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         room.setPhase(GamePhase.FINISHED);
 
         String winner = null;
-        for (Object survivorObj : room.getAlivePlayers()) {
-            winner = (String) survivorObj;
+        for (String survivor : room.getAlivePlayers()) {
+            winner = survivor;
             break;
         }
 
         if (winner != null) {
-            for (Object usernameObj : room.getUsers().keySet()) {
-                String username = (String) usernameObj;
-                UserSession session = (UserSession) users.get(username);
+            for (String username : room.getUsers().keySet()) {
+                UserSession session = users.get(username);
                 if (session != null) {
                     try {
                         room.clearTurnShots();
@@ -395,45 +413,59 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
 
     private void resolveTurn(Room room) throws RemoteException {
         Map<String, Coordinate> shots = new HashMap<>(room.getCurrentTurnShots());
-        HashSet<String> aliveAtStart = new HashSet<>(room.getAlivePlayers());
+        Set<String> aliveAtStart = new HashSet<>(room.getAlivePlayers());
 
-        Map<String, ResultantShot> globalResults = new HashMap<>();
-        Map<String, List<String>> details = new HashMap<>();
+        Map<String, ResultantShot> aggregatedResults = new HashMap<>();
+        Map<String, List<String>> sunkEventsByShooter = new HashMap<>();
 
         for (Map.Entry<String, Coordinate> shotEntry : shots.entrySet()) {
             String shooter = shotEntry.getKey();
             Coordinate shot = shotEntry.getValue();
 
-            ResultantShot globalResult = ResultantShot.MISS;
-            List<String> shotDetails = new ArrayList<>();
+            ResultantShot aggregated = ResultantShot.MISS;
+            List<String> sunkEvents = new ArrayList<>();
 
             for (String target : aliveAtStart) {
-                if (target.equals(shooter)) continue;
+                if (target.equals(shooter)) {
+                    continue;
+                }
 
                 UserSession targetSession = users.get(target);
-                if (targetSession == null) continue;
+                if (targetSession == null) {
+                    continue;
+                }
 
-                ResultantShot localResult = targetSession.getCallback()
+                ShotResolutionDTO resolution = targetSession.getCallback()
                         .resolveIncomingShot(shot.getRow(), shot.getColumn());
 
-                shotDetails.add("contra " + target + ": " + localResult);
+                if (resolution == null || resolution.result == null) {
+                    continue;
+                }
 
-                if (localResult == ResultantShot.SUNK) {
-                    globalResult = ResultantShot.SUNK;
-                } else if (localResult == ResultantShot.HIT && globalResult != ResultantShot.SUNK) {
-                    globalResult = ResultantShot.HIT;
+                if (resolution.result == ResultantShot.SUNK) {
+                    aggregated = ResultantShot.SUNK;
+
+                    String sunkMessage = "Hundido: " + target +
+                            " pierde un " + resolution.sunkShipType +
+                            " y le quedan " + resolution.remainingShips + " barcos.";
+                    sunkEvents.add(sunkMessage);
+
+                } else if (resolution.result == ResultantShot.HIT && aggregated != ResultantShot.SUNK) {
+                    aggregated = ResultantShot.HIT;
                 }
             }
 
-            globalResults.put(shooter, globalResult);
-            details.put(shooter, shotDetails);
+            aggregatedResults.put(shooter, aggregated);
+            sunkEventsByShooter.put(shooter, sunkEvents);
         }
 
-        HashSet<String> defeatedPlayers = new HashSet<>();
+        Set<String> defeatedPlayers = new HashSet<>();
 
         for (String target : aliveAtStart) {
             UserSession targetSession = users.get(target);
-            if (targetSession == null) continue;
+            if (targetSession == null) {
+                continue;
+            }
 
             if (targetSession.getCallback().hasLost()) {
                 defeatedPlayers.add(target);
@@ -449,10 +481,11 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         for (Map.Entry<String, Coordinate> shotEntry : shots.entrySet()) {
             String shooter = shotEntry.getKey();
             Coordinate shot = shotEntry.getValue();
-            ResultantShot result = globalResults.get(shooter);
-            List<String> shotDetails = details.get(shooter);
-            ShipDTO shotDto = buildShotDTO(shot, result);
-            notifyRoomTurnResult(room, shooter, shotDto, shotDetails);
+            ResultantShot result = aggregatedResults.get(shooter);
+            List<String> sunkEvents = sunkEventsByShooter.get(shooter);
+
+            ShipDTO shotDto = buildShotDTO(shot, result, sunkEvents);
+            notifyRoomTurnResult(room, shooter, shotDto, sunkEvents);
         }
 
         room.clearTurnShots();
@@ -466,5 +499,7 @@ public class BattleshipServerImpl extends UnicastRemoteObject implements Battles
         sendLog("Sala " + room.getName() + " -> turno resuelto, nuevo turno iniciado");
     }
 
-
+    private boolean isValidCoordinate(int row, int column) {
+        return row >= 0 && row < Board.SIZE && column >= 0 && column < Board.SIZE;
+    }
 }

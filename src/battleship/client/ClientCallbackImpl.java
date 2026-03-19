@@ -2,13 +2,14 @@ package battleship.client;
 
 import battleship.dto.GameStatusDTO;
 import battleship.dto.ShipDTO;
+import battleship.dto.ShotResolutionDTO;
 import battleship.model.Board;
 import battleship.model.Coordinate;
-import battleship.model.ResultantShot;
 import battleship.remote.ClientCallback;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.List;
 
 public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCallback {
 
@@ -76,26 +77,18 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
     }
 
     @Override
-    public void notifyTurnResult(String shooter, ShipDTO shot, java.util.List<String> details) throws RemoteException {
+    public void notifyTurnResult(String shooter, ShipDTO shot, List<String> details) throws RemoteException {
         if (shot == null) {
             return;
         }
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("Resultado del disparo de ")
-                .append(shooter)
-                .append(" en (")
-                .append(shot.row)
-                .append(",")
-                .append(shot.column)
-                .append("): ")
-                .append(shot.type);
+        System.out.println("Disparo de " + shooter + " en (" + shot.row + "," + shot.column + ") -> " + shot.type);
 
-        if (details != null && !details.isEmpty()) {
-            sb.append(" -> ").append(String.join(" | ", details));
+        if (details != null) {
+            for (String detail : details) {
+                System.out.println("  " + detail);
+            }
         }
-
-        System.out.println(sb.toString());
     }
 
     @Override
@@ -107,12 +100,11 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
     }
 
     @Override
-    public ResultantShot resolveIncomingShot(int row, int column) throws RemoteException {
+    public ShotResolutionDTO resolveIncomingShot(int row, int column) throws RemoteException {
         if (localBoard == null) {
-            return ResultantShot.MISS;
+            return null;
         }
-
-        return localBoard.shoot(new Coordinate(row, column));
+        return localBoard.shootDetailed(new Coordinate(row, column));
     }
 
     @Override
