@@ -7,6 +7,7 @@ import battleship.model.Ship;
 import battleship.model.ShipType;
 import battleship.remote.BattleshipServer;
 
+import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.Scanner;
@@ -92,12 +93,26 @@ public class ClientMain {
                     }
 
                     case "4" -> {
-                        localBoard = buildDefaultBoard();
-                        if (localBoard != null) {
+                        System.out.println("Modo de colocación:");
+                        System.out.println("1. Automática (demo rápida)");
+                        System.out.println("2. Manual");
+                        System.out.print("Elige modo: ");
+                        String placementMode = sc.nextLine().trim();
+
+                        Board generatedBoard = null;
+
+                        switch (placementMode) {
+                            case "1" -> generatedBoard = buildDefaultBoard();
+                            case "2" -> generatedBoard = buildManualBoard(sc, callback);
+                            default -> callback.notifyLog("Modo de colocación inválido");
+                        }
+
+                        if (generatedBoard != null) {
+                            localBoard = generatedBoard;
                             callback.setLocalBoard(localBoard);
-                            callback.notifyLog("Barcos colocados localmente en el cliente");
-                        } else {
-                            callback.notifyLog("No se pudo colocar el tablero local");
+                            callback.notifyLog("Tablero preparado correctamente");
+                        } else if ("1".equals(placementMode) || "2".equals(placementMode)) {
+                            callback.notifyLog("No se pudo preparar el tablero");
                         }
                     }
 
@@ -164,5 +179,81 @@ public class ClientMain {
         ok &= board.placeShip(new Ship(ShipType.AIRCRAFTCARRIER, new Coordinate(7, 4), Orientation.HORIZONTAL));
 
         return ok ? board : null;
+    }
+
+    private static Board buildManualBoard(Scanner sc, ClientCallbackImpl callback) throws RemoteException {
+        Board board = new Board();
+
+        ShipType[] fleet = {
+                ShipType.BOAT,
+                ShipType.FRIGATE,
+                ShipType.CRUISER,
+                ShipType.AIRCRAFTCARRIER
+        };
+
+        callback.notifyLog("Entrando en colocación manual de barcos.");
+
+        for (ShipType shipType : fleet) {
+            boolean placed = false;
+
+            while (!placed) {
+                callback.setLocalBoard(board);
+                callback.notifyLog("Coloca " + shipType + " (tamaño " + shipType.getSize() + ")");
+
+                Integer row = readInt(sc, "Fila inicial para " + shipType + ": ", callback);
+                if (row == null) {
+                    continue;
+                }
+
+                Integer col = readInt(sc, "Columna inicial para " + shipType + ": ", callback);
+                if (col == null) {
+                    continue;
+                }
+
+                Orientation orientation = readOrientation(sc, callback);
+                if (orientation == null) {
+                    continue;
+                }
+
+                Ship ship = new Ship(shipType, new Coordinate(row, col), orientation);
+                placed = board.placeShip(ship);
+
+                if (placed) {
+                    callback.notifyLog(shipType + " colocado correctamente.");
+                } else {
+                    callback.notifyLog("Posición inválida para " + shipType + ". Revisa límites, colisiones o adyacencias.");
+                }
+            }
+        }
+
+        callback.setLocalBoard(board);
+        callback.notifyLog("Flota colocada manualmente.");
+        return board;
+    }
+
+    private static Integer readInt(Scanner sc, String prompt, ClientCallbackImpl callback) throws RemoteException {
+        System.out.print(prompt);
+        String text = sc.nextLine().trim();
+
+        try {
+            return Integer.parseInt(text);
+        } catch (NumberFormatException e) {
+            callback.notifyLog("Número inválido: " + text);
+            return null;
+        }
+    }
+
+    private static Orientation readOrientation(Scanner sc, ClientCallbackImpl callback) throws RemoteException {
+        System.out.print("Orientación (H/V): ");
+        String text = sc.nextLine().trim().toUpperCase();
+
+        return switch (text) {
+            case "H" -> Orientation.HORIZONTAL;
+            case "V" -> Orientation.VERTICAL;
+            default -> {
+                callback.notifyLog("Orientación inválida. Usa H o V.");
+                yield null;
+            }
+        };
     }
 }
